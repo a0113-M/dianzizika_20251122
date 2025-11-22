@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>电子字卡</title>
+    
+    <!-- --- PWA全屏适配设置 --- -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#f0f0f0">
+    <!-- 嵌入式Manifest，用于Android Chrome/Edge添加到桌面后的全屏显示 -->
+    <link rel="manifest" href='data:application/manifest+json;charset=utf-8,{"name":"电子字卡","short_name":"字卡","start_url":".","display":"standalone","background_color":"#f0f0f0","theme_color":"#f0f0f0"}'>
+
+    <style>
+        /* --- 样式保持不变，原汁原味 --- */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f0f0f0; }
+        *:focus { outline: none; }
+        /* 禁止长按弹出系统菜单，提升App体验 */
+        body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+        input, textarea { -webkit-user-select: auto; user-select: auto; }
+
+        #desktop { width: 100vw; height: 100vh; background: #ffffff; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease, background-image 0.5s ease; background-size: cover; background-position: center; }
+        .user-widget { display: flex; flex-direction: column; align-items: center; margin-bottom: 50px; }
+        #time-widget { color: #333; text-shadow: none; margin-top: 20px; text-align: center; }
+        #time-display { font-size: 48px; font-weight: 200; }
+        #date-display { font-size: 16px; font-weight: 400; }
+        #photo-container { width: 200px; height: 120px; background-color: #e9e9e9; border-radius: 18px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.1); background-size: cover; background-position: center; display: flex; justify-content: center; align-items: center; color: rgba(0,0,0,0.4); font-size: 14px; transition: background-color 0.3s; }
+        #photo-container:hover { background-color: #dcdcdc; }
+        #photo-upload { display: none; }
+        .app-grid { display: grid; grid-template-columns: repeat(2, 80px); gap: 40px; }
+        .app-icon { display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; text-align: center; transition: transform 0.2s ease; }
+        .app-icon:hover { transform: scale(1.1); }
+        .app-icon .icon-placeholder { width: 60px; height: 60px; background-color: #f0f0f0; border-radius: 12px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); background-size: cover; background-position: center; }
+        .app-icon .app-name { color: #555; font-size: 14px; font-weight: 500; text-shadow: none; }
+        .app-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #f0f2f5; display: none; flex-direction: column; box-sizing: border-box; }
+        .back-to-desktop { font-size: 14px; color: #888; cursor: pointer; z-index: 1002; } 
+        .app-header-right-icon { position: absolute; top: 20px; right: 20px; font-size: 14px; color: #888; cursor: pointer; z-index: 1002; }
+        
+        #card-drawer-app { background-color: #fff; justify-content: space-between; align-items: center; padding: 20px; } 
+        
+        /* 顶部栏通用样式 */
+        .card-app-header { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 5px; box-sizing: border-box; z-index: 100; }
+
+        #card-drawer-app .card-stack { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; } 
+        
+        /* 卡片样式 - 扩展颜色 */
+        #card-drawer-app .card { 
+            width: 85%; max-width: 340px; height: 70%; max-height: 450px; border-radius: 20px; 
+            display: flex; justify-content: center; align-items: center; font-size: 28px; position: absolute; 
+            transition: transform 0.35s ease, opacity 0.35s ease, background-color 0.3s; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        } 
+        .card-color-1 { background-color: #ffffff; color: #222; border: 1px solid #eaeaea; } 
+        .card-color-2 { background-color: #f0f0f0; color: #888; border: 1px solid #ddd; } 
+        .card-color-3 { background-color: #333333; color: #ccc; border: 1px solid #222; } 
+        .card-color-4 { background-color: #ffe6e6; color: #d63031; border: 1px solid #fab1a0; } 
+        .card-color-5 { background-color: #e6f7ff; color: #0984e3; border: 1px solid #74b9ff; } 
+        .card-color-6 { background-color: #f0ffe6; color: #00b894; border: 1px solid #55efc4; } 
+        .card-color-7 { background-color: #fff6e6; color: #e17055; border: 1px solid #fdcb6e; } 
+        .card-color-8 { background-color: #f6e6ff; color: #6c5ce7; border: 1px solid #a29bfe; } 
+        .card-color-9 { background-color: #e6fffa; color: #00cec9; border: 1px solid #81ecec; } 
+        .card-color-10 { background-color: #fff0e6; color: #e84393; border: 1px solid #fd79a8; } 
+        .card-color-11 { background-color: #f8f9fa; color: #495057; border: 1px solid #dee2e6; } 
+        .card-color-12 { background-color: #e8f5e8; color: #2e7d32; border: 1px solid #a5d6a7; } 
+        .card-color-13 { background-color: #fff3e0; color: #ef6c00; border: 1px solid #ffb74d; } 
+        .card-color-14 { background-color: #f3e5f5; color: #7b1fa2; border: 1px solid #ce93d8; } 
+        .card-color-15 { background-color: #e0f2f1; color: #00695c; border: 1px solid #80cbc4; } 
+        .card-color-16 { background-color: #fff8e1; color: #f57f17; border: 1px solid #ffe082; } 
+        .card-color-17 { background-color: #e8eaf6; color: #303f9f; border: 1px solid #9fa8da; } 
+        .card-color-18 { background-color: #fbe9e7; color: #d84315; border: 1px solid #ffab91; } 
+        .card-color-19 { background-color: #e0f7fa; color: #00838f; border: 1px solid #80deea; } 
+        .card-color-20 { background-color: #fce4ec; color: #ad1457; border: 1px solid #f48fb1; } 
+
+        .card.pos-top { transform: translateY(0) scale(1); z-index: 3; } 
+        .card.pos-middle { transform: translateY(-10px) scale(0.98); z-index: 2; opacity: 0.8; } 
+        .card.pos-bottom { transform: translateY(-20px) scale(0.96); z-index: 1; opacity: 0.6; } 
+        .card.pos-offscreen { transform: translateX(-120%) rotate(-15deg) scale(1); opacity: 0; z-index: 0; }
+        .card-stack.is-shuffling .card.pos-top { transform: translateX(-120%) rotate(-15deg) scale(1); opacity: 0; } 
+        .card-stack.is-shuffling .card.pos-middle { transform: translateY(0) scale(1); z-index: 3; opacity: 1; } 
+        .card-stack.is-shuffling .card.pos-bottom { transform: translateY(-10px) scale(0.98); z-index: 2; opacity: 0.8; } 
+        
+        #card-drawer-app .card-content { padding: 20px; word-break: break-all; text-align: center; font-weight: 500; letter-spacing: 1px; } 
+        #card-drawer-app .card-actions { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 380px; padding: 10px 0 20px 0; }
+        
+        .char-selector-header-group { display: flex; align-items: center; gap: 8px; }
+        .char-selector-header-group label { font-size: 13px; color: #888; }
+        #card-char-selector { padding: 6px 10px; border-radius: 15px; border: 1px solid #ddd; font-size: 13px; background-color: #f5f5f5; outline: none; color: #333; }
+
+        #card-drawer-app .question-area { width: 100%; display: flex; gap: 10px; margin-bottom: 15px; }
+        #card-drawer-app #question-input { flex-grow: 1; padding: 12px; border-radius: 25px; border: 1px solid #ccc; font-size: 14px; }
+        #card-drawer-app #ask-button { padding: 12px 20px; }
+        #card-drawer-app .card-nav { width: 100%; display: flex; justify-content: space-around; align-items: flex-end; padding-bottom: 10px;} 
+        #card-drawer-app .nav-button { cursor: pointer; text-align: center; } 
+        #card-drawer-app .nav-button.shuffle, #card-drawer-app #ask-button { background-color: #222; color: white; padding: 12px 28px; border-radius: 25px; font-size: 16px; border: none; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: background-color 0.3s, transform 0.2s; } 
+        #card-drawer-app .nav-button.shuffle:active, #card-drawer-app #ask-button:active { transform: scale(0.95); }
+        
+        #card-drawer-app .nav-button.icon { width: auto; height: auto; background-color: transparent; border-radius: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #333; min-width: 50px; }
+        #card-drawer-app .nav-button.icon svg { width: 28px; height: 28px; fill: #333; transition: transform 0.2s; }
+        #card-drawer-app .nav-button.icon span { font-size: 11px; font-weight: 500; color: #555; }
+        #card-drawer-app .nav-button.icon:hover svg { transform: scale(1.1); }
+
+        .nav-button.shuffle:disabled, #ask-button:disabled { background-color: #ccc; box-shadow: none; cursor: not-allowed; color: #666; }
+        #question-input:disabled { background-color: #f0f0f0; cursor: not-allowed; }
+        #draw-count-indicator { color: #e74c3c; font-size: 14px; margin-bottom: 10px; height: 16px; visibility: hidden; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); display: none; justify-content: center; align-items: center; z-index: 1000; } .modal-content { background-color: #fff; padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 5px 15px rgba(0,0,0,0.3); overflow-y: auto; } .modal-content h3 { margin-top: 0; text-align: center; } .modal-section { margin-bottom: 15px; flex-shrink: 0; } .modal-section label { display: block; margin-bottom: 5px; font-size: 14px; color: #555; } .modal-section select, .modal-section input[type="text"], .modal-section textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .add-card-section { display: flex; gap: 10px; } .add-card-section input { flex-grow: 1; } .add-card-section button, .modal-actions button { padding: 8px 15px; border-radius: 6px; border: none; cursor: pointer; background-color: #4285f4; color: white; font-size: 14px; white-space: nowrap; } .add-card-section .secondary-btn { background-color: #5cb85c; } .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; } .modal-actions .close-btn { background-color: #ccc; color: #333; }
+        #search-card-input { margin-bottom: 10px; } #card-list-container { height: 25vh; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 6px; background-color: #f9f9f9; } .card-item { display: flex; justify-content: space-between; align-items: center; background-color: #fff; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); } .card-item span { word-break: break-all; } .delete-card-btn { background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 18px; padding-left: 10px; } #bulk-import-modal .modal-content { max-height: 80vh; overflow-y: hidden; } #bulk-import-textarea { width: 100%; height: 200px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; padding: 8px; font-family: inherit; margin-bottom: 10px; }
+        
+/* 优化后的消息时间戳样式 */
+.message-timestamp {
+    font-size: 11px;
+    color: #999;
+    text-align: center;
+    margin: 15px 0;
+    position: relative;
+}
+
+.message-timestamp::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 100%;
+    height: 1px;
+    background-color: #eee;
+    z-index: -1;
+}
+
+.message-timestamp span {
+    background-color: #f8f9fa;
+    padding: 0 12px;
+}
+
+.chat-message .bubble {
+    position: relative;
+    margin-bottom: 8px;
+}
+
+.chat-message.character .bubble::after {
+    content: attr(data-timestamp);
+    position: absolute;
+    bottom: -16px;
+    left: 15px;
+    font-size: 10px;
+    color: #999;
+    white-space: nowrap;
+}
+
+.chat-message.user .bubble::after {
+    content: attr(data-timestamp);
+    position: absolute;
+    bottom: -16px;
+    right: 15px;
+    font-size: 10px;
+    color: #999;
+    white-space: nowrap;
+}
+        /* --- 通讯App样式 --- */
+        #chat-app { flex-direction: row; }
+        .chat-sidebar { width: 80px; background-color: #e9eaec; flex-shrink: 0; padding-top: 50px; display: flex; flex-direction: column; align-items: center; }
+        .chat-sidebar-list { width: 100%; overflow-y: auto; }
+        .sidebar-character { display: flex; flex-direction: column; align-items: center; padding: 15px 0; cursor: pointer; position: relative; }
+        .sidebar-character .avatar { width: 48px; height: 48px; border-radius: 12px; background-color: #ccc; margin-bottom: 5px; background-size: cover; background-position: center; }
+        .sidebar-character .name { font-size: 12px; color: #333; width: 90%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sidebar-character.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 4px; height: 30px; background-color: #4285f4; border-radius: 0 2px 2px 0; }
+        .chat-main { flex-grow: 1; display: flex; flex-direction: column; height: 100%; position: relative; }
+        
+        /* 正常头部 */
+        .chat-header { display: flex; justify-content: space-between; align-items: center; padding: 10px; background-color: #f5f5f5; border-bottom: 1px solid #e7e7e7; position: absolute; top: 0; left: 0; right: 0; z-index: 10; height: 30px; }
+        .chat-header-back { font-size: 16px; color: #4285f4; cursor: pointer; flex-basis: 80px; padding-left: 10px; }
+        .chat-header-title { font-weight: 600; text-align: center; flex-grow: 1; left: 50%; transform: translateX(-50%); position: absolute; }
+        .chat-header-actions { flex-basis: 80px; text-align: right; padding-right: 10px; position: relative;}
+        
+        /* 选中模式头部 (默认隐藏) */
+        #chat-selection-header { display: none; justify-content: space-between; align-items: center; padding: 10px; background-color: #333; color: white; border-bottom: 1px solid #222; position: absolute; top: 0; left: 0; right: 0; z-index: 12; height: 30px; }
+        #selection-cancel-btn { cursor: pointer; padding: 5px 10px; font-size: 14px; color: #ddd; }
+        #selection-title { font-weight: 500; font-size: 15px; }
+        #selection-delete-btn { cursor: pointer; padding: 5px 10px; font-size: 14px; color: #ff6b6b; font-weight: bold; }
+
+        .icon-btn { font-size: 24px; cursor: pointer; }
+        .actions-menu { display: none; position: absolute; top: 100%; right: 10px; background-color: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); list-style: none; padding: 5px; margin: 5px 0 0 0; z-index: 11; display: flex; white-space: nowrap;}
+        .actions-menu li { padding: 8px 10px; cursor: pointer; }
+        .actions-menu li:hover { background-color: #f0f0f0; }
+        .chat-body { margin-top: 50px; flex-grow: 1; padding: 10px; overflow-y: auto; transition: background-image 0.5s ease; background-size: cover; background-position: center; }
+        .chat-message { display: flex; margin-bottom: 15px; align-items: flex-end; position: relative; transition: opacity 0.2s; }
+        .chat-message.user { justify-content: flex-end; }
+        .chat-message .bubble { max-width: 70%; padding: 10px 15px; border-radius: 18px; word-wrap: break-word; transition: background-color 0.2s, transform 0.1s; }
+        .chat-message.user .bubble { background-color: #dcf8c6; }
+        .chat-message.character .bubble { background-color: #fff; }
+        .chat-message .avatar { width: 36px; height: 36px; border-radius: 50%; background-color: #ccc; background-size: cover; background-position: center; margin-right: 10px; }
+        
+        /* 选中状态样式 */
+        .chat-message.selected .bubble { background-color: #b3d4fc !important; transform: scale(0.98); border: 2px solid #4285f4; }
+        .chat-message.selected.user .bubble { background-color: #a4c4f0 !important; }
+        
+        .chat-load-more-btn { text-align: center; font-size: 12px; color: #4285f4; padding: 10px; cursor: pointer; margin-bottom: 10px; background-color: rgba(255,255,255,0.6); border-radius: 15px; width: fit-content; margin-left: auto; margin-right: auto; }
+        
+        #character-manager-modal .character-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+        #character-manager-modal .character-item:hover { background-color: #f9f9f9; }
+        #character-manager-modal .character-item:last-child { border-bottom: none; }
+        #character-manager-modal .delete-char-btn { color: #ff4d4d; font-size: 18px; padding: 5px; }
+        #edit-char-prompt { height: 150px; resize: vertical; }
+        #edit-char-avatar-preview { width: 60px; height: 60px; border-radius: 50%; background-color: #eee; margin-top: 10px; cursor: pointer; background-size: cover; background-position: center; display: flex; justify-content: center; align-items: center; font-size: 12px; color: #888; text-align: center; }
+        #edit-char-avatar-upload { display: none; }
+        
+        #settings-app { overflow-y: auto; }
+        .settings-header-container { padding: 20px; }
+        .settings-list { list-style: none; padding: 0; margin: 0; background-color: #fff; width: 100%; }
+        .settings-item { padding: 15px 20px; border-bottom: 1px solid #f0f0f0; cursor: pointer; font-size: 16px; }
+        .settings-item:hover { background-color: #f9f9f9; }
+        .settings-item:last-child { border-bottom: none; }
+        .settings-view { padding: 20px; box-sizing: border-box; width: 100%; display: none; flex-direction: column; gap: 20px; }
+        .settings-form-group, .appearance-section { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .settings-form-group label, .appearance-section-title { display: block; margin-bottom: 10px; font-size: 16px; color: #333; font-weight: 500; }
+        .settings-form-group input, .settings-form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        .settings-button { padding: 10px 15px; border-radius: 6px; border: none; cursor: pointer; background-color: #4285f4; color: white; font-size: 15px; width: 100%; box-sizing: border-box; text-align: center; margin-top: 10px; }
+        .settings-button:first-child { margin-top: 0; }
+        .settings-button.secondary { background-color: #6c757d; }
+        .settings-button.danger { background-color: #dc3545; }
+        .settings-button:disabled { background-color: #a0a0a0; cursor: not-allowed; }
+        .appearance-wallpaper-controls { display: flex; align-items: center; gap: 10px; }
+        .wallpaper-preview { width: 60px; height: 40px; border-radius: 4px; background-color: #eee; background-size: cover; background-position: center; border: 1px solid #ddd; }
+        .appearance-controls { display: flex; gap: 10px; flex-grow: 1; }
+        .appearance-controls .settings-button { width: auto; flex-grow: 1; margin-top: 0; }
+        .app-icon-setting-item { display: flex; align-items: center; gap: 15px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .app-icon-setting-item:last-child { border-bottom: none; }
+        .icon-preview { width: 36px; height: 36px; border-radius: 8px; background-color: #f0f0f0; background-size: cover; background-position: center; border: 1px solid #eee; flex-shrink: 0; }
+        .app-icon-setting-item span { font-size: 15px; flex-grow: 1; }
+
+        /* --- 纸条App样式 --- */
+        #notes-app-main-view { width: 100%; height: 100%; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 15px; position: relative; }
+        .notes-control-group { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .notes-control-group label { display: block; margin-bottom: 10px; font-weight: 500; }
+        .notes-control-group select, .notes-control-group textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
+        #note-user-input { height: 120px; resize: vertical; }
+        .note-card-draw-area { display: flex; flex-direction: column; gap: 10px; }
+        #note-draw-card-btn { width: 100%; background-color: #5cb85c; color: white; padding: 12px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background-color 0.3s; }
+        #note-draw-card-btn:disabled { background-color: #a0a0a0; cursor: not-allowed; }
+        #note-drawn-cards-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .note-drawn-card-display { text-align: center; padding: 10px; background-color: #f0f0f0; border: 1px dashed #ccc; border-radius: 6px; font-size: 14px; color: #666; word-break: break-all; min-height: 2.5em; display: flex; align-items: center; justify-content: center; }
+        #note-generate-btn { width: 100%; background-color: #4285f4; color: white; padding: 15px; border: none; border-radius: 8px; font-size: 18px; font-weight: 500; cursor: pointer; transition: background-color 0.3s; margin-top: auto; flex-shrink: 0; }
+        #note-generate-btn:disabled { background-color: #a0a0a0; cursor: not-allowed; }
+        
+        .note-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #fdfaf4; z-index: 1001; display: none; flex-direction: column; box-sizing: border-box; padding: 20px; }
+        .note-view-back-btn { position: absolute; top: 20px; left: 20px; font-size: 14px; color: #888; cursor: pointer; z-index: 1002; }
+        .note-view-content { margin-top: 40px; overflow-y: auto; height: 100%; }
+        #note-reply-content { white-space: pre-wrap; word-wrap: break-word; font-size: 17px; line-height: 1.8em; color: #4a4a4a; background-image: linear-gradient(rgba(224, 210, 190, 0.5) .1em, transparent .1em); background-size: 100% 1.8em;}
+        
+        #note-history-list { list-style: none; padding: 0; margin: 0; }
+        .note-history-item { background-color: #fff; padding: 12px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+        .note-history-item:hover { background-color: #f9f9f9; }
+        .note-history-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .note-history-char-name { font-weight: 600; }
+        .note-history-date { font-size: 12px; color: #999; }
+        .note-history-preview { font-size: 14px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* 加载指示器 */
+        #global-loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 2000; display: flex; justify-content: center; align-items: center; flex-direction: column; transition: opacity 0.3s; pointer-events: none; opacity: 0;}
+        #global-loading.active { opacity: 1; pointer-events: auto; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #333; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 10px; }
+        /* 紧急重置按钮 */
+        #emergency-reset-btn { display: none; margin-top: 20px; padding: 10px 20px; background-color: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); }
+        #emergency-reset-btn:hover { background-color: #c0392b; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* 自定义抽卡次数样式 */
+        .draw-count-control { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .draw-count-control label { font-size: 14px; color: #555; }
+        .draw-count-control input { width: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; text-align: center; }
+        
+        /* 随机抽卡模式样式 */
+        .random-mode-control { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .random-mode-control label { font-size: 14px; color: #555; }
+        .random-mode-control input { width: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; text-align: center; }
+        
+        /* 卡牌颜色数量控制样式 */
+        .color-count-control { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .color-count-control label { font-size: 14px; color: #555; }
+        .color-count-control input { width: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; text-align: center; }
+        
+        /* 定时抽卡设置样式 */
+        .auto-draw-control { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .auto-draw-control label { font-size: 14px; color: #555; }
+        .auto-draw-control input { width: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; text-align: center; }
+    </style>
+</head>
+<body>
+    <!-- 加载遮罩 -->
+    <div id="global-loading" class="active">
+        <div class="spinner"></div>
+        <div id="loading-text">正在连接数据库...</div>
+        <button id="emergency-reset-btn">无法进入？强制重置数据</button>
+    </div>
+
+    <!-- 桌面HTML结构 -->
+    <div id="desktop">
+        <div class="user-widget">
+            <label for="photo-upload"><div id="photo-container">点击上传照片</div></label>
+            <input type="file" id="photo-upload" accept="image/*">
+            <div id="time-widget">
+                <div id="time-display"></div>
+                <div id="date-display"></div>
+            </div>
+        </div>
+        <div class="app-grid">
+            <div class="app-icon" id="app-card-drawer"><div class="icon-placeholder"></div><span class="app-name">抽卡</span></div>
+            <div class="app-icon" id="app-chat"><div class="icon-placeholder"></div><span class="app-name">通讯</span></div>
+            <div class="app-icon" id="app-notes"><div class="icon-placeholder"></div><span class="app-name">纸条</span></div>
+            <div class="app-icon" id="app-settings"><div class="icon-placeholder"></div><span class="app-name">设置</span></div>
+        </div>
+    </div>
+    
+    <div id="card-drawer-app" class="app-screen">
+        <div class="card-app-header">
+            <div class="back-to-desktop" id="card-back-btn"> &lt; 返回桌面 </div>
+            <div class="char-selector-header-group">
+                <label for="card-char-selector">角色:</label>
+                <select id="card-char-selector"><option>加载中...</option></select>
+            </div>
+        </div>
+
+        <div class="card-stack" id="card-stack">
+            <div class="card card-color-1 pos-top"><span class="card-content">请先提问</span></div>
+            <div class="card card-color-2 pos-middle"><span class="card-content"></span></div>
+            <div class="card card-color-3 pos-bottom"><span class="card-content"></span></div>
+        </div>
+        <div class="card-actions">
+            <!-- 新增：随机抽卡模式控制 -->
+            <div class="random-mode-control" id="random-mode-control">
+                <label for="random-draw-mode">随机抽卡模式:</label>
+                <input type="checkbox" id="random-draw-mode">
+                <label for="min-draw-count">最小:</label>
+                <input type="number" id="min-draw-count" min="1" max="20" value="1">
+                <label for="max-draw-count">最大:</label>
+                <input type="number" id="max-draw-count" min="1" max="20" value="4">
+            </div>
+            
+            <!-- 新增：自定义抽卡次数控制 -->
+            <div class="draw-count-control" id="fixed-draw-control">
+                <label for="custom-draw-count">固定抽卡次数:</label>
+                <input type="number" id="custom-draw-count" min="1" max="20" value="4">
+            </div>
+            
+            <div class="question-area">
+                <input type="text" id="question-input" placeholder="请在这里输入问题...">
+                <button id="ask-button" disabled>提问</button>
+            </div>
+            <div id="draw-count-indicator"></div>
+            <div class="card-nav">
+                <div class="nav-button icon" id="nav-chat-link-from-card"> 
+                    <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                    <span>跳转通讯</span> 
+                </div>
+                <div class="nav-button shuffle" id="shuffle-button"> 洗牌 </div>
+                <div class="nav-button icon" id="nav-deck-settings"> 
+                    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/><path d="M0 0h24v24H0z" fill="none"/></svg>
+                    <span>牌组</span> 
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 通讯App的HTML结构 -->
+    <div id="chat-app" class="app-screen">
+        <!-- 正常头部 -->
+        <div class="chat-header" id="chat-header-normal">
+            <span class="chat-header-back" id="chat-back-btn">&lt; 返回</span>
+            <span class="chat-header-title" id="chat-header-title">通讯</span>
+            <div class="chat-header-actions">
+                <span class="icon-btn" id="chat-actions-btn">···</span>
+                <ul class="actions-menu" id="chat-actions-menu" style="display: none;">
+                    <li id="add-character-menu-btn">添加角色</li>
+                    <li id="manage-characters-menu-btn">管理角色</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 选中模式头部 -->
+        <div id="chat-selection-header">
+            <div id="selection-cancel-btn">取消</div>
+            <div id="selection-title">选择消息</div>
+            <div id="selection-delete-btn">删除</div>
+        </div>
+
+        <div class="chat-sidebar"><div class="chat-sidebar-list" id="chat-sidebar-list"></div></div>
+        <div class="chat-main">
+            <div class="chat-body" id="chat-body"><p style="text-align: center; color: #aaa;">请先添加并选择一个角色</p></div>
+        </div>
+    </div>
+    
+    <!-- 纸条App的HTML结构 -->
+    <div id="notes-app" class="app-screen">
+        <div id="notes-app-main-view">
+            <div class="card-app-header">
+                <div class="back-to-desktop" id="notes-back-btn"> &lt; 返回桌面 </div>
+                <div class="app-header-right-icon" id="note-history-btn" style="position: static; margin: 0;">历史记录</div>
+            </div>
+            
+            <div class="notes-control-group">
+                <label for="note-char-selector">选择交换纸条的角色:</label>
+                <select id="note-char-selector"></select>
+            </div>
+
+            <div class="notes-control-group">
+                <label for="note-user-input">写下你的小纸条:</label>
+                <textarea id="note-user-input" placeholder="今天发生了什么开心的事吗？..."></textarea>
+            </div>
+
+            <div class="notes-control-group">
+                <label id="note-draw-card-label">为这次交换抽取主题卡:</label>
+                <div class="note-card-draw-area">
+                    <div id="note-drawn-cards-container">
+                        <div class="note-drawn-card-display"></div>
+                        <div class="note-drawn-card-display"></div>
+                        <div class="note-drawn-card-display"></div>
+                        <div class="note-drawn-card-display"></div>
+                    </div>
+                    <button id="note-draw-card-btn">抽取</button>
+                </div>
+            </div>
+
+            <button id="note-generate-btn" disabled>生成回信</button>
+        </div>
+
+        <div id="note-reply-view" class="note-view">
+            <div class="note-view-back-btn" id="note-reply-back-btn"> &lt; 返回 </div>
+            <div class="note-view-content" id="note-reply-content-wrapper">
+                <div id="note-reply-content"></div>
+            </div>
+        </div>
+
+        <div id="note-history-view" class="note-view">
+             <div class="note-view-back-btn" id="note-history-back-btn"> &lt; 返回 </div>
+             <div class="note-view-content">
+                <ul id="note-history-list"></ul>
+             </div>
+        </div>
+    </div>
+
+    <div id="settings-app" class="app-screen">
+        <div class="settings-header-container">
+            <div class="back-to-desktop" id="settings-back-btn"> &lt; 返回桌面 </div>
+        </div>
+        <ul class="settings-list" id="settings-list-main">
+            <li class="settings-item" id="setting-api">API设置</li>
+            <li class="settings-item" id="setting-appearance">外观设置</li>
+            <li class="settings-item" id="setting-font">字体设置</li>
+            <li class="settings-item" id="setting-backup">备份/导入数据</li>
+            <li class="settings-item" id="setting-feedback">反馈/许愿</li>
+        </ul>
+        <div id="api-settings-view" class="settings-view">
+            <div class="settings-form-group"><label for="api-url">URL</label><input type="text" id="api-url" placeholder="例如: https://api.openai.com/v1"></div><div class="settings-form-group"><label for="api-key">密钥</label><input type="password" id="api-key" placeholder="请输入你的API Key"></div><div class="settings-form-group"><label for="api-model-selector">可用模型</label><select id="api-model-selector"><option>请先拉取模型列表</option></select></div><button class="settings-button secondary" id="fetch-models-btn">拉取模型</button><button class="settings-button" id="save-api-settings-btn">保存设置</button>
+        </div>
+        <div id="appearance-settings-view" class="settings-view">
+            <div class="appearance-section"><p class="appearance-section-title">桌面壁纸</p><div class="appearance-wallpaper-controls"><div id="desktop-wallpaper-preview" class="wallpaper-preview"></div><div class="appearance-controls"><button class="settings-button" id="upload-desktop-wallpaper-btn">上传</button><button class="settings-button danger" id="reset-desktop-wallpaper-btn">重置</button></div></div><input type="file" id="desktop-wallpaper-upload" accept="image/*" style="display:none;"></div><div class="appearance-section"><p class="appearance-section-title">通讯壁纸</p><div class="appearance-wallpaper-controls"><div id="chat-wallpaper-preview" class="wallpaper-preview"></div><div class="appearance-controls"><button class="settings-button" id="upload-chat-wallpaper-btn">上传</button><button class="settings-button danger" id="reset-chat-wallpaper-btn">重置</button></div></div><input type="file" id="chat-wallpaper-upload" accept="image/*" style="display:none;"></div><div class="appearance-section"><p class="appearance-section-title">应用图标</p><div id="app-icon-settings-container"></div></div>
+            <div class="appearance-section"><p class="appearance-section-title">字体大小</p><div class="appearance-controls"><button class="settings-button" id="font-size-small">小</button><button class="settings-button" id="font-size-medium">中</button><button class="settings-button" id="font-size-large">大</button></div></div>
+            <div class="appearance-section"><p class="appearance-section-title">卡牌颜色设置</p><div id="card-colors-settings-container"></div></div>
+            <div class="appearance-section"><p class="appearance-section-title">卡牌颜色数量</p><div class="color-count-control"><label for="color-count-input">可用颜色数量 (1-20):</label><input type="number" id="color-count-input" min="1" max="20" value="10"></div><button class="settings-button" id="save-color-count-btn">保存颜色数量</button></div>
+            <div class="appearance-section"><p class="appearance-section-title">默认抽卡设置</p><div class="settings-form-group"><label for="default-draw-mode">默认模式:</label><select id="default-draw-mode"><option value="fixed">固定次数</option><option value="random">随机次数</option></select></div><div class="settings-form-group"><label for="default-fixed-draw-count">固定抽卡次数 (1-20):</label><input type="number" id="default-fixed-draw-count" min="1" max="20" value="4"></div><div class="settings-form-group"><label for="default-min-draw-count">随机最小次数 (1-20):</label><input type="number" id="default-min-draw-count" min="1" max="20" value="1"></div><div class="settings-form-group"><label for="default-max-draw-count">随机最大次数 (1-20):</label><input type="number" id="default-max-draw-count" min="1" max="20" value="4"></div><button class="settings-button" id="save-default-draw-settings-btn">保存默认设置</button></div>
+            <!-- 新增：定时抽卡设置 -->
+            <div class="appearance-section"><p class="appearance-section-title">定时抽卡设置</p><div class="auto-draw-control"><label for="auto-draw-enabled">启用定时抽卡:</label><input type="checkbox" id="auto-draw-enabled"></div><div class="settings-form-group"><label for="auto-draw-interval">抽卡间隔 (分钟):</label><input type="number" id="auto-draw-interval" min="1" max="1440" value="60"></div><div class="auto-draw-control"><label for="auto-draw-min-count">最小抽卡数:</label><input type="number" id="auto-draw-min-count" min="0" max="10" value="0"></div><div class="auto-draw-control"><label for="auto-draw-max-count">最大抽卡数:</label><input type="number" id="auto-draw-max-count" min="1" max="10" value="3"></div><button class="settings-button" id="save-auto-draw-settings-btn">保存定时设置</button></div>
+        </div>
+        <div id="font-settings-view" class="settings-view">
+             <div class="settings-form-group"><label for="font-url">字体URL</label><input type="text" id="font-url" placeholder="粘贴字体的URL (e.g., .woff2)"></div><button class="settings-button" id="apply-font-btn">应用字体</button><button class="settings-button danger" id="reset-font-btn">恢复默认字体</button>
+        </div>
+        <div id="backup-settings-view" class="settings-view">
+            <div class="appearance-section">
+                <button class="settings-button" id="backup-data-btn">备份数据</button>
+                <button class="settings-button secondary" id="import-data-btn">导入数据</button>
+                <input type="file" id="import-data-upload" accept=".json" style="display: none;">
+                <button class="settings-button danger" id="reset-all-data-btn">重置全部数据</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗部分 -->
+    <div id="deck-settings-modal" class="modal"><div class="modal-content"><h3>牌组设置</h3><div class="modal-section"><label for="deck-selector">选择牌组进行编辑:</label><select id="deck-selector"></select></div><div class="modal-section"><label for="current-deck-name">牌组名称 (可修改或新建):</label><input type="text" id="current-deck-name" placeholder="为新牌组命名"></div><div class="modal-section"><label>卡片列表:</label><input type="text" id="search-card-input" placeholder="搜索卡片..."><div id="card-list-container"></div></div><div class="modal-section add-card-section"><input type="text" id="new-card-input" placeholder="输入新卡片内容"><button id="add-card-btn">添加</button><button id="bulk-import-btn" class="secondary-btn">批量导入</button></div><div class="modal-actions"><button id="save-deck-btn">保存</button><button class="close-btn" id="close-modal-btn">关闭</button></div></div></div>
+    <div id="bulk-import-modal" class="modal"><div class="modal-content"><h3>批量导入卡片</h3><p style="font-size: 14px; color: #666; margin-top: 0;">请将字词粘贴到下方，每个字词占一行。</p><textarea id="bulk-import-textarea"></textarea><div class="modal-actions"><button id="confirm-bulk-import-btn">确认导入</button><button class="close-btn" id="cancel-bulk-import-btn">取消</button></div></div></div>
+    <div id="character-manager-modal" class="modal"><div class="modal-content"><h3>管理角色</h3><div class="modal-section"><label>点击角色进行编辑或删除:</label><div id="character-list"></div></div><div class="modal-actions"><button class="close-btn" id="close-char-manager-modal-btn">关闭</button></div></div></div>
+    <div id="character-editor-modal" class="modal"><div class="modal-content"><h3 id="char-editor-title">创建新角色</h3><input type="hidden" id="editing-char-id"><div class="modal-section"><label for="edit-char-name">名字:</label><input type="text" id="edit-char-name"></div><div class="modal-section"><label for="edit-char-prompt">人设 (Prompt):</label><textarea id="edit-char-prompt" rows="6"></textarea></div><div class="modal-section"><label>头像:</label><label for="edit-char-avatar-upload"><div id="edit-char-avatar-preview">点击<br>上传</div></label><input type="file" id="edit-char-avatar-upload" accept="image/*"></div><div class="modal-actions"><button id="save-char-btn">保存</button><button class="close-btn" id="close-char-editor-modal-btn">取消</button></div></div></div>
+
+    <script>
+        // ============================================================
+        //  SimpleDB
+        // ============================================================
+        const SimpleDB = {
+            dbName: 'DesktopAppDB_v1',
+            dbVersion: 1,
+            db: null,
+
+            open() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, this.dbVersion);
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('images')) db.createObjectStore('images');
+                        if (!db.objectStoreNames.contains('data')) db.createObjectStore('data');
+                    };
+                    request.onsuccess = (e) => {
+                        this.db = e.target.result;
+                        resolve(this.db);
+                    };
+                    request.onerror = (e) => reject('IndexedDB error: ' + e.target.error);
+                    request.onblocked = () => reject('DB Blocked');
+                });
+            },
+
+            async set(storeName, key, value) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) return reject('DB not open');
+                    const tx = this.db.transaction(storeName, 'readwrite');
+                    const store = tx.objectStore(storeName);
+                    const req = store.put(value, key);
+                    req.onsuccess = () => resolve(true);
+                    req.onerror = () => reject(req.error);
+                });
+            },
+
+            async get(storeName, key) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) return reject('DB not open');
+                    const tx = this.db.transaction(storeName, 'readonly');
+                    const store = tx.objectStore(storeName);
+                    const req = store.get(key);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            },
+
+            async del(storeName, key) {
+                 return new Promise((resolve, reject) => {
+                    if (!this.db) return reject('DB not open');
+                    const tx = this.db.transaction(storeName, 'readwrite');
+                    const store = tx.objectStore(storeName);
+                    const req = store.delete(key);
+                    req.onsuccess = () => resolve(true);
+                    req.onerror = () => reject(req.error);
+                });
+            },
+            
+            async getAll(storeName) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) return reject('DB not open');
+                    const tx = this.db.transaction(storeName, 'readonly');
+                    const store = tx.objectStore(storeName);
+                    const req = store.getAll(); 
+                    const keyReq = store.getAllKeys(); 
+                    
+                    req.onsuccess = () => {
+                        keyReq.onsuccess = () => {
+                            const result = {};
+                            req.result.forEach((val, i) => {
+                                result[keyReq.result[i]] = val;
+                            });
+                            resolve(result);
+                        }
+                    };
+                    req.onerror = () => reject(req.error);
+                });
+            }
+        };
+
+        // 加载控制
+        const loadingEl = document.getElementById('global-loading');
+        const emergencyResetBtn = document.getElementById('emergency-reset-btn');
+        
+        function hideLoading() { 
+            loadingEl.classList.remove('active'); 
+            emergencyResetBtn.style.display = 'none';
+        }
+        function showLoading(text) { 
+            if(text) document.getElementById('loading-text').textContent = text; 
+            loadingEl.classList.add('active'); 
+        }
+        emergencyResetBtn.addEventListener('click', async () => {
+            if(confirm("这将清空所有本地数据（包括卡组、角色、设置）以修复卡死问题。确定吗？")) {
+                localStorage.clear();
+                indexedDB.deleteDatabase(SimpleDB.dbName);
+                alert("数据已重置，即将刷新页面...");
+                location.reload();
+            }
+        });
+
+        // --- 基础App变量定义 ---
+        const desktop = document.getElementById('desktop'); 
+        const cardDrawerApp = document.getElementById('card-drawer-app'); 
+        const chatApp = document.getElementById('chat-app');
+        const notesApp = document.getElementById('notes-app');
+        const settingsApp = document.getElementById('settings-app'); 
+        const appCardDrawerIcon = document.getElementById('app-card-drawer'); 
+        const appChatIcon = document.getElementById('app-chat');
+        const appNotesIcon = document.getElementById('app-notes');
+        const appSettingsIcon = document.getElementById('app-settings'); 
+        let navigationHistory = [];
+        const settingsListMain = document.getElementById('settings-list-main');
+        const apiSettingsView = document.getElementById('api-settings-view');
+        const appearanceSettingsView = document.getElementById('appearance-settings-view');
+        const fontSettingsView = document.getElementById('font-settings-view');
+        const backupSettingsView = document.getElementById('backup-settings-view');
+        
+        function hideAllApps() { cardDrawerApp.style.display = 'none'; chatApp.style.display = 'none'; notesApp.style.display = 'none'; settingsApp.style.display = 'none'; }
+        function hideAllSettingsViews() { apiSettingsView.style.display = 'none'; appearanceSettingsView.style.display = 'none'; fontSettingsView.style.display = 'none'; backupSettingsView.style.display = 'none'; }
+        function showDesktop() { desktop.style.opacity = '1'; desktop.style.pointerEvents = 'auto'; hideAllApps(); navigationHistory = []; }
+        function showCardDrawerApp() { desktop.style.opacity = '0'; desktop.style.pointerEvents = 'none'; hideAllApps(); cardDrawerApp.style.display = 'flex'; updateCardAppCharSelector(); checkGameState(); }
+        function showChatApp(from) { desktop.style.opacity = '0'; desktop.style.pointerEvents = 'none'; hideAllApps(); chatApp.style.display = 'flex'; renderSidebarCharacterList(); if(from) navigationHistory.push(from); }
+        function showNotesApp() { desktop.style.opacity = '0'; desktop.style.pointerEvents = 'none'; hideAllApps(); notesApp.style.display = 'flex'; prepareNotesApp(); }
+        function showSettingsApp() { desktop.style.opacity = '0'; desktop.style.pointerEvents = 'none'; hideAllApps(); settingsApp.style.display = 'block'; hideAllSettingsViews(); settingsListMain.style.display = 'block'; document.getElementById('settings-back-btn').textContent = '< 返回桌面'; }
+        
+        appCardDrawerIcon.addEventListener('click', showCardDrawerApp); 
+        appChatIcon.addEventListener('click', () => showChatApp('desktop'));
+        appNotesIcon.addEventListener('click', showNotesApp);
+        appSettingsIcon.addEventListener('click', showSettingsApp); 
+        document.getElementById('nav-chat-link-from-card').addEventListener('click', () => showChatApp('card_drawer'));
+        document.getElementById('card-back-btn').addEventListener('click', showDesktop);
+        document.getElementById('notes-back-btn').addEventListener('click', showDesktop);
+        document.getElementById('settings-back-btn').addEventListener('click', () => { if (apiSettingsView.style.display === 'flex' || appearanceSettingsView.style.display === 'flex' || fontSettingsView.style.display === 'flex' || backupSettingsView.style.display === 'flex') { showSettingsApp(); } else { showDesktop(); } }); 
+        document.getElementById('chat-back-btn').addEventListener('click', () => { 
+            // 只有在非选择模式下，返回按钮才生效，防止误触
+            if (!isChatSelectionMode) {
+                const lastPage = navigationHistory.pop(); 
+                if (lastPage === 'card_drawer') { showCardDrawerApp(); } else { showDesktop(); } 
+            }
+        });
+        function openSettingsSubView(viewElement) { settingsListMain.style.display = 'none'; hideAllSettingsViews(); viewElement.style.display = 'flex'; document.getElementById('settings-back-btn').textContent = '< 返回设置'; }
+        document.getElementById('setting-api').addEventListener('click', () => openSettingsSubView(apiSettingsView));
+        document.getElementById('setting-appearance').addEventListener('click', () => { openSettingsSubView(appearanceSettingsView); renderAppIconSettings(); renderCardColorsSettings(); });
+        document.getElementById('setting-font').addEventListener('click', () => openSettingsSubView(fontSettingsView));
+        document.getElementById('setting-backup').addEventListener('click', () => openSettingsSubView(backupSettingsView));
+        // 反馈/许愿 按钮事件
+        document.getElementById('setting-feedback').addEventListener('click', () => {
+            window.open('https://xhslink.com/m/2tfmmImt5p0', '_blank');
+        });
+
+        // --- API ---
+        const apiUrlInput = document.getElementById('api-url'); const apiKeyInput = document.getElementById('api-key'); const apiModelSelector = document.getElementById('api-model-selector'); const fetchModelsBtn = document.getElementById('fetch-models-btn'); const saveApiSettingsBtn = document.getElementById('save-api-settings-btn'); let apiSettings = {};
+        function loadApiSettings() { 
+            const savedSettings = localStorage.getItem('apiSettings'); 
+            if (savedSettings) { 
+                apiSettings = JSON.parse(savedSettings); 
+                apiUrlInput.value = apiSettings.url || ''; 
+                apiKeyInput.value = apiSettings.apiKey || ''; 
+                if (apiSettings.selectedModel) { apiModelSelector.innerHTML = `<option value="${apiSettings.selectedModel}">${apiSettings.selectedModel}</option>`; } 
+            } 
+        }
+        saveApiSettingsBtn.addEventListener('click', () => { apiSettings = { url: apiUrlInput.value.trim(), apiKey: apiKeyInput.value.trim(), selectedModel: apiModelSelector.value }; localStorage.setItem('apiSettings', JSON.stringify(apiSettings)); alert('API设置已保存！'); });
+        fetchModelsBtn.addEventListener('click', async () => { const url = apiUrlInput.value.trim(); const key = apiKeyInput.value.trim(); if (!url || !key) { alert('请先填写URL和密钥！'); return; } const modelsUrl = url.endsWith('/v1') ? `${url}/models` : `${url}/v1/models`; fetchModelsBtn.disabled = true; fetchModelsBtn.textContent = '正在拉取...'; try { const response = await fetch(modelsUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } }); if (!response.ok) { throw new Error(`网络请求失败: ${response.status}`); } const data = await response.json(); apiModelSelector.innerHTML = ''; if (data.data && data.data.length > 0) { data.data.forEach(model => { const option = new Option(model.id, model.id); apiModelSelector.add(option); }); if (apiSettings.selectedModel && data.data.some(m => m.id === apiSettings.selectedModel)) { apiModelSelector.value = apiSettings.selectedModel; } alert('模型列表拉取成功！'); } else { apiModelSelector.innerHTML = '<option>未找到可用模型</option>'; alert('成功连接，但未找到可用模型。'); } } catch (error) { console.error('拉取模型失败:', error); alert(`拉取模型失败: ${error.message}。`); apiModelSelector.innerHTML = '<option>拉取失败</option>'; } finally { fetchModelsBtn.disabled = false; fetchModelsBtn.textContent = '拉取模型'; } });
+        async function callApi(systemPrompt, userPrompt) {
+            const { url, apiKey, selectedModel } = apiSettings;
+            if (!url || !apiKey || !selectedModel) { throw new Error("API未配置。请在设置中填写URL、密钥并选择模型。"); }
+            const completionsUrl = url.endsWith('/v1') ? `${url}/chat/completions` : `${url}/v1/chat/completions`;
+            const response = await fetch(completionsUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model: selectedModel, messages: [ { "role": "system", "content": systemPrompt }, { "role": "user", "content": userPrompt } ] }) });
+            if (!response.ok) { const errorData = await response.json(); throw new Error(`API请求失败: ${response.status} - ${errorData.error.message}`); }
+            const data = await response.json(); return data.choices[0].message.content;
+        }
+
+        // --- 外观 ---
+        const chatBody = document.getElementById('chat-body');
+        const desktopWallpaperPreview = document.getElementById('desktop-wallpaper-preview'); 
+        const chatWallpaperPreview = document.getElementById('chat-wallpaper-preview');
+        const desktopWallpaperUpload = document.getElementById('desktop-wallpaper-upload');
+        const chatWallpaperUpload = document.getElementById('chat-wallpaper-upload');
+        const appIconSettingsContainer = document.getElementById('app-icon-settings-container');
+        const cardColorsSettingsContainer = document.getElementById('card-colors-settings-container');
+        const apps = [ { id: 'app-card-drawer', name: '抽卡' }, { id: 'app-chat', name: '通讯' }, { id: 'app-notes', name: '纸条' }, { id: 'app-settings', name: '设置' }];
+
+        // 字体大小设置
+        const fontSizeSmallBtn = document.getElementById('font-size-small');
+        const fontSizeMediumBtn = document.getElementById('font-size-medium');
+        const fontSizeLargeBtn = document.getElementById('font-size-large');
+        
+        function setFontSize(size) {
+            document.documentElement.style.fontSize = size;
+            localStorage.setItem('fontSize', size);
+        }
+        
+        function loadFontSize() {
+            const savedSize = localStorage.getItem('fontSize');
+            if (savedSize) {
+                document.documentElement.style.fontSize = savedSize;
+            }
+        }
+        
+        fontSizeSmallBtn.addEventListener('click', () => setFontSize('12px'));
+        fontSizeMediumBtn.addEventListener('click', () => setFontSize('14px'));
+        fontSizeLargeBtn.addEventListener('click', () => setFontSize('16px'));
+
+        // 卡牌颜色设置
+        let cardColors = [
+            { id: 1, bg: '#ffffff', text: '#222', border: '#eaeaea' },
+            { id: 2, bg: '#f0f0f0', text: '#888', border: '#ddd' },
+            { id: 3, bg: '#333333', text: '#ccc', border: '#222' },
+            { id: 4, bg: '#ffe6e6', text: '#d63031', border: '#fab1a0' },
+            { id: 5, bg: '#e6f7ff', text: '#0984e3', border: '#74b9ff' },
+            { id: 6, bg: '#f0ffe6', text: '#00b894', border: '#55efc4' },
+            { id: 7, bg: '#fff6e6', text: '#e17055', border: '#fdcb6e' },
+            { id: 8, bg: '#f6e6ff', text: '#6c5ce7', border: '#a29bfe' },
+            { id: 9, bg: '#e6fffa', text: '#00cec9', border: '#81ecec' },
+            { id: 10, bg: '#fff0e6', text: '#e84393', border: '#fd79a8' },
+            { id: 11, bg: '#f8f9fa', text: '#495057', border: '#dee2e6' },
+            { id: 12, bg: '#e8f5e8', text: '#2e7d32', border: '#a5d6a7' },
+            { id: 13, bg: '#fff3e0', text: '#ef6c00', border: '#ffb74d' },
+            { id: 14, bg: '#f3e5f5', text: '#7b1fa2', border: '#ce93d8' },
+            { id: 15, bg: '#e0f2f1', text: '#00695c', border: '#80cbc4' },
+            { id: 16, bg: '#fff8e1', text: '#f57f17', border: '#ffe082' },
+            { id: 17, bg: '#e8eaf6', text: '#303f9f', border: '#9fa8da' },
+            { id: 18, bg: '#fbe9e7', text: '#d84315', border: '#ffab91' },
+            { id: 19, bg: '#e0f7fa', text: '#00838f', border: '#80deea' },
+            { id: 20, bg: '#fce4ec', text: '#ad1457', border: '#f48fb1' }
+        ];
+
+        let activeColorCount = 10; // 默认激活的颜色数量
+
+        function renderCardColorsSettings() {
+            cardColorsSettingsContainer.innerHTML = '';
+            
+            // 只显示激活的颜色
+            for (let i = 0; i < activeColorCount && i < cardColors.length; i++) {
+                const color = cardColors[i];
+                const colorItem = document.createElement('div');
+                colorItem.className = 'app-icon-setting-item';
+                colorItem.innerHTML = `
+                    <div class="icon-preview" style="background-color: ${color.bg}; border: 1px solid ${color.border}"></div>
+                    <span>卡牌颜色 ${i + 1}</span>
+                    <div class="appearance-controls">
+                        <input type="color" value="${color.bg}" data-index="${i}" data-type="bg" class="color-picker">
+                        <input type="color" value="${color.text}" data-index="${i}" data-type="text" class="color-picker">
+                    </div>
+                `;
+                cardColorsSettingsContainer.appendChild(colorItem);
+            }
+        }
+
+        function updateCardColorStyles() {
+            let style = '';
+            for (let i = 0; i < activeColorCount && i < cardColors.length; i++) {
+                const color = cardColors[i];
+                style += `
+                    .card-color-${i + 1} { 
+                        background-color: ${color.bg} !important; 
+                        color: ${color.text} !important; 
+                        border: 1px solid ${color.border} !important; 
+                    }
+                `;
+            }
+            
+            let styleEl = document.getElementById('dynamic-card-colors');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'dynamic-card-colors';
+                document.head.appendChild(styleEl);
+            }
+            styleEl.innerHTML = style;
+        }
+
+        cardColorsSettingsContainer.addEventListener('change', (e) => {
+            if (e.target.classList.contains('color-picker')) {
+                const index = parseInt(e.target.dataset.index);
+                const type = e.target.dataset.type;
+                const value = e.target.value;
+                
+                cardColors[index][type] = value;
+                updateCardColorStyles();
+                saveCardColors();
+            }
+        });
+
+        async function saveCardColors() {
+            await SimpleDB.set('data', 'cardColors', cardColors);
+        }
+
+        async function loadCardColors() {
+            const savedColors = await SimpleDB.get('data', 'cardColors');
+            if (savedColors) {
+                cardColors = savedColors;
+            }
+            updateCardColorStyles();
+        }
+
+        // 卡牌颜色数量设置
+        const colorCountInput = document.getElementById('color-count-input');
+        const saveColorCountBtn = document.getElementById('save-color-count-btn');
+        
+        function loadColorCount() {
+            const savedCount = localStorage.getItem('activeColorCount');
+            if (savedCount) {
+                activeColorCount = parseInt(savedCount);
+                colorCountInput.value = activeColorCount;
+            }
+            updateCardColorStyles();
+        }
+        
+        saveColorCountBtn.addEventListener('click', () => {
+            const count = parseInt(colorCountInput.value);
+            if (count >= 1 && count <= 20) {
+                activeColorCount = count;
+                localStorage.setItem('activeColorCount', count);
+                updateCardColorStyles();
+                renderCardColorsSettings();
+                alert('卡牌颜色数量已保存！');
+            } else {
+                alert('请输入1-20之间的数字！');
+            }
+        });
+
+        // 默认抽卡设置
+        const defaultDrawModeSelect = document.getElementById('default-draw-mode');
+        const defaultFixedDrawCountInput = document.getElementById('default-fixed-draw-count');
+        const defaultMinDrawCountInput = document.getElementById('default-min-draw-count');
+        const defaultMaxDrawCountInput = document.getElementById('default-max-draw-count');
+        const saveDefaultDrawSettingsBtn = document.getElementById('save-default-draw-settings-btn');
+        
+        function loadDefaultDrawSettings() {
+            const savedSettings = localStorage.getItem('defaultDrawSettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                defaultDrawModeSelect.value = settings.mode || 'fixed';
+                defaultFixedDrawCountInput.value = settings.fixedCount || 4;
+                defaultMinDrawCountInput.value = settings.minCount || 1;
+                defaultMaxDrawCountInput.value = settings.maxCount || 4;
+                
+                // 应用到抽卡界面
+                randomDrawModeCheckbox.checked = settings.mode === 'random';
+                customDrawCountInput.value = settings.fixedCount || 4;
+                minDrawCountInput.value = settings.minCount || 1;
+                maxDrawCountInput.value = settings.maxCount || 4;
+                
+                // 更新显示/隐藏状态
+                updateDrawModeVisibility();
+            }
+        }
+        
+        saveDefaultDrawSettingsBtn.addEventListener('click', () => {
+            const settings = {
+                mode: defaultDrawModeSelect.value,
+                fixedCount: parseInt(defaultFixedDrawCountInput.value),
+                minCount: parseInt(defaultMinDrawCountInput.value),
+                maxCount: parseInt(defaultMaxDrawCountInput.value)
+            };
+            
+            if (settings.fixedCount >= 1 && settings.fixedCount <= 20 && 
+                settings.minCount >= 1 && settings.minCount <= 20 && 
+                settings.maxCount >= 1 && settings.maxCount <= 20 &&
+                settings.minCount <= settings.maxCount) {
+                
+                localStorage.setItem('defaultDrawSettings', JSON.stringify(settings));
+                
+                // 应用到抽卡界面
+                randomDrawModeCheckbox.checked = settings.mode === 'random';
+                customDrawCountInput.value = settings.fixedCount;
+                minDrawCountInput.value = settings.minCount;
+                maxDrawCountInput.value = settings.maxCount;
+                
+                // 更新显示/隐藏状态
+                updateDrawModeVisibility();
+                
+                alert('默认抽卡设置已保存！');
+            } else {
+                alert('请检查输入值是否有效！最小次数不能大于最大次数。');
+            }
+        });
+
+        // 定时抽卡设置
+        const autoDrawEnabledCheckbox = document.getElementById('auto-draw-enabled');
+        const autoDrawIntervalInput = document.getElementById('auto-draw-interval');
+        const autoDrawMinCountInput = document.getElementById('auto-draw-min-count');
+        const autoDrawMaxCountInput = document.getElementById('auto-draw-max-count');
+        const saveAutoDrawSettingsBtn = document.getElementById('save-auto-draw-settings-btn');
+        
+        let autoDrawTimer = null;
+        
+        function loadAutoDrawSettings() {
+            const savedSettings = localStorage.getItem('autoDrawSettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                autoDrawEnabledCheckbox.checked = settings.enabled || false;
+                autoDrawIntervalInput.value = settings.interval || 60;
+                autoDrawMinCountInput.value = settings.minCount || 0;
+                autoDrawMaxCountInput.value = settings.maxCount || 3;
+                
+                // 启动或停止定时器
+                if (settings.enabled) {
+                    startAutoDrawTimer(settings.interval);
+                }
+            }
+        }
+        
+        saveAutoDrawSettingsBtn.addEventListener('click', () => {
+            const settings = {
+                enabled: autoDrawEnabledCheckbox.checked,
+                interval: parseInt(autoDrawIntervalInput.value),
+                minCount: parseInt(autoDrawMinCountInput.value),
+                maxCount: parseInt(autoDrawMaxCountInput.value)
+            };
+            
+            if (settings.interval >= 1 && settings.interval <= 1440 && 
+                settings.minCount >= 0 && settings.minCount <= 10 && 
+                settings.maxCount >= 1 && settings.maxCount <= 10 &&
+                settings.minCount <= settings.maxCount) {
+                
+                localStorage.setItem('autoDrawSettings', JSON.stringify(settings));
+                
+                // 启动或停止定时器
+                if (settings.enabled) {
+                    startAutoDrawTimer(settings.interval);
+                } else {
+                    stopAutoDrawTimer();
+                }
+                
+                alert('定时抽卡设置已保存！');
+            } else {
+                alert('请检查输入值是否有效！最小抽卡数不能大于最大抽卡数。');
+            }
+        });
+        
+        function startAutoDrawTimer(intervalMinutes) {
+            stopAutoDrawTimer(); // 先停止现有的定时器
+            
+            const intervalMs = intervalMinutes * 60 * 1000;
+            autoDrawTimer = setInterval(() => {
+                performAutoDraw();
+            }, intervalMs);
+            
+            console.log(`定时抽卡已启动，间隔: ${intervalMinutes}分钟`);
+        }
+        
+        function stopAutoDrawTimer() {
+            if (autoDrawTimer) {
+                clearInterval(autoDrawTimer);
+                autoDrawTimer = null;
+                console.log('定时抽卡已停止');
+            }
+        }
+        
+        async function performAutoDraw() {
+            // 检查是否有活跃的角色和牌组
+            if (Object.keys(characters).length === 0 || !currentActiveDeckName || !cardDecks[currentActiveDeckName] || cardDecks[currentActiveDeckName].length === 0) {
+                console.log('定时抽卡: 没有可用的角色或牌组');
+                return;
+            }
+            
+            // 获取设置
+            const autoDrawSettings = JSON.parse(localStorage.getItem('autoDrawSettings') || '{}');
+            const minCount = autoDrawSettings.minCount || 0;
+            const maxCount = autoDrawSettings.maxCount || 3;
+            
+            // 随机决定抽卡数量
+            const drawCount = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
+            
+            if (drawCount === 0) {
+                console.log('定时抽卡: 本次不抽卡');
+                return;
+            }
+            
+            console.log(`定时抽卡: 准备抽取 ${drawCount} 张卡`);
+            
+            // 随机选择一个角色
+            const charIds = Object.keys(characters);
+            const randomCharId = charIds[Math.floor(Math.random() * charIds.length)];
+            const character = characters[randomCharId];
+            
+            // 获取牌组
+            const deck = cardDecks[currentActiveDeckName];
+            
+            // 生成时间戳
+const now = new Date();
+const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+// 抽取卡片
+for (let i = 0; i < drawCount; i++) {
+    const randIndex = Math.floor(Math.random() * deck.length);
+    const drawnCard = deck[randIndex];
+    const randomColorIndex = Math.floor(Math.random() * activeColorCount);
+    
+    // 添加消息到聊天，包含时间戳
+    addMessageToChat(randomCharId, 'character', drawnCard, randomColorIndex, timestamp);
+    
+    // 短暂延迟，避免一次性发送太多消息
+    await new Promise(resolve => setTimeout(resolve, 500));
+}            
+            console.log(`定时抽卡: 已为角色 ${character.name} 抽取 ${drawCount} 张卡`);
+        }
+
+        function handleImageUpload(file, callback) { if (file && file.type.startsWith('image/')) { const reader = new FileReader(); reader.onload = (e) => callback(e.target.result); reader.readAsDataURL(file); } }
+
+        const photoUpload = document.getElementById('photo-upload'); 
+        const photoContainer = document.getElementById('photo-container'); 
+        photoUpload.addEventListener('change', function(event) { const file = event.target.files[0]; handleImageUpload(file, async (img) => { photoContainer.style.backgroundImage = `url(${img})`; photoContainer.textContent = ''; await SimpleDB.set('images', 'user_widget_photo', img); }); });
+
+        document.getElementById('upload-desktop-wallpaper-btn').addEventListener('click', () => desktopWallpaperUpload.click());
+        desktopWallpaperUpload.addEventListener('change', (e) => handleImageUpload(e.target.files[0], async (img) => { desktop.style.backgroundImage = `url(${img})`; desktopWallpaperPreview.style.backgroundImage = `url(${img})`; await SimpleDB.set('images', 'desktopWallpaper', img); }));
+        document.getElementById('reset-desktop-wallpaper-btn').addEventListener('click', async () => { desktop.style.backgroundImage = ''; desktopWallpaperPreview.style.backgroundImage = ''; await SimpleDB.del('images', 'desktopWallpaper'); });
+
+        document.getElementById('upload-chat-wallpaper-btn').addEventListener('click', () => chatWallpaperUpload.click());
+        chatWallpaperUpload.addEventListener('change', (e) => handleImageUpload(e.target.files[0], async (img) => { chatBody.style.backgroundImage = `url(${img})`; chatWallpaperPreview.style.backgroundImage = `url(${img})`; await SimpleDB.set('images', 'chatWallpaper', img); }));
+        document.getElementById('reset-chat-wallpaper-btn').addEventListener('click', async () => { chatBody.style.backgroundImage = ''; chatWallpaperPreview.style.backgroundImage = ''; await SimpleDB.del('images', 'chatWallpaper'); });
+
+        async function renderAppIconSettings() { appIconSettingsContainer.innerHTML = ''; for(const app of apps) { const iconUrl = await SimpleDB.get('images', `appIcon_${app.id}`); const item = document.createElement('div'); item.className = 'app-icon-setting-item'; item.innerHTML = `<div class="icon-preview" id="preview-${app.id}" style="background-image: url(${iconUrl || ''})"></div><span>${app.name}</span><div class="appearance-controls"><button class="settings-button" data-app-id="${app.id}">上传</button></div><input type="file" id="upload-${app.id}" accept="image/*" style="display:none;">`; appIconSettingsContainer.appendChild(item); } }
+        appIconSettingsContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { document.getElementById(`upload-${e.target.dataset.appId}`).click(); }});
+        appIconSettingsContainer.addEventListener('change', (e) => { if (e.target.tagName === 'INPUT' && e.target.type === 'file') { const appId = e.target.id.replace('upload-', ''); handleImageUpload(e.target.files[0], async (img) => { document.querySelector(`#${appId} .icon-placeholder`).style.backgroundImage = `url(${img})`; document.getElementById(`preview-${appId}`).style.backgroundImage = `url(${img})`; await SimpleDB.set('images', `appIcon_${appId}`, img); }); } });
+
+        async function loadAppearanceSettings() { 
+            const desktopWallpaper = await SimpleDB.get('images', 'desktopWallpaper'); if(desktopWallpaper) { desktop.style.backgroundImage = `url(${desktopWallpaper})`; desktopWallpaperPreview.style.backgroundImage = `url(${desktopWallpaper})`;} 
+            const chatWallpaper = await SimpleDB.get('images', 'chatWallpaper'); if(chatWallpaper) { chatBody.style.backgroundImage = `url(${chatWallpaper})`; chatWallpaperPreview.style.backgroundImage = `url(${chatWallpaper})`;} 
+            const userPhoto = await SimpleDB.get('images', 'user_widget_photo'); if(userPhoto) { photoContainer.style.backgroundImage = `url(${userPhoto})`; photoContainer.textContent = ''; }
+            for(const app of apps) { const iconUrl = await SimpleDB.get('images', `appIcon_${app.id}`); if (iconUrl) { document.querySelector(`#${app.id} .icon-placeholder`).style.backgroundImage = `url(${iconUrl})`; } }
+        }
+        
+        const fontUrlInput = document.getElementById('font-url'); const applyFontBtn = document.getElementById('apply-font-btn'); const resetFontBtn = document.getElementById('reset-font-btn'); const customFontStylesheet = document.createElement('style'); document.head.appendChild(customFontStylesheet);
+        function applyFont(fontUrl) { if (!fontUrl) { customFontStylesheet.innerHTML = ""; document.body.style.fontFamily = ""; return; } const fontName = 'CustomFont'; const fontFaceRule = `@font-face { font-family: '${fontName}'; src: url('${fontUrl}'); }`; const bodyRule = `body, button, input, textarea, select { font-family: '${fontName}', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important; }`; customFontStylesheet.innerHTML = fontFaceRule + bodyRule; localStorage.setItem('customFontUrl', fontUrl); }
+        applyFontBtn.addEventListener('click', () => { const url = fontUrlInput.value.trim(); if (url) { applyFont(url); alert('字体已应用！'); } else { alert('请输入有效的字体URL。'); } });
+        resetFontBtn.addEventListener('click', () => { applyFont(null); fontUrlInput.value = ''; localStorage.removeItem('customFontUrl'); alert('已恢复默认字体。'); });
+        function loadFontSettings() { const savedFontUrl = localStorage.getItem('customFontUrl'); if (savedFontUrl) { fontUrlInput.value = savedFontUrl; applyFont(savedFontUrl); } }
+
+        // --- 备份/导入 ---
+        const backupDataBtn = document.getElementById('backup-data-btn'); const importDataBtn = document.getElementById('import-data-btn'); const importDataUpload = document.getElementById('import-data-upload'); const resetAllDataBtn = document.getElementById('reset-all-data-btn');
+        function recursiveParse(data) { if (typeof data === 'string') { try { const parsed = JSON.parse(data); return recursiveParse(parsed); } catch (e) { return data; } } else if (typeof data === 'object' && data !== null) { for (let key in data) { data[key] = recursiveParse(data[key]); } } return data; }
+        backupDataBtn.addEventListener('click', async () => { showLoading('正在打包备份数据...'); try { const localStorageData = { ...localStorage }; const imagesData = await SimpleDB.getAll('images'); const dbData = await SimpleDB.getAll('data'); const finalBackup = { version: 2, ls: localStorageData, db_images: imagesData, db_data: dbData }; const dataStr = JSON.stringify(finalBackup); const dataBlob = new Blob([dataStr], { type: 'application/json' }); const url = URL.createObjectURL(dataBlob); const a = document.createElement('a'); a.href = url; const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-'); a.download = `backup-full-${timestamp}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); } catch(e) { alert('备份失败：' + e); } finally { hideLoading(); } });
+        importDataBtn.addEventListener('click', () => { importDataUpload.click(); });
+        importDataUpload.addEventListener('change', (e) => { const file = e.target.files[0]; if (!file) return; if (confirm('导入数据将覆盖当前所有设置和数据，确定要继续吗？')) { showLoading('正在恢复数据...'); const reader = new FileReader(); reader.onload = async (event) => { try { let importedData = JSON.parse(event.target.result); importedData = recursiveParse(importedData); if(!importedData.version) { console.log("检测到旧版备份，正在尝试全面迁移数据..."); localStorage.clear(); let deckDataToImport = importedData.cardDecks; if (!deckDataToImport) { deckDataToImport = importedData.cardDecksData || {}; } await SimpleDB.set('data', 'cardDecksData', deckDataToImport); if(importedData.currentActiveDeck) await SimpleDB.set('data', 'currentActiveDeck', importedData.currentActiveDeck); if(importedData.chatCharacters) await SimpleDB.set('data', 'chatCharacters', importedData.chatCharacters); if(importedData.chatHistory) await SimpleDB.set('data', 'chatHistory', importedData.chatHistory); if(importedData.noteHistory) await SimpleDB.set('data', 'noteHistory', importedData.noteHistory); if(importedData.currentChatCharacterId) await SimpleDB.set('data', 'currentChatCharacterId', importedData.currentChatCharacterId); const imageKeys = ['desktopWallpaper', 'chatWallpaper', 'user_widget_photo']; for(const key in importedData) { if(imageKeys.includes(key) || key.startsWith('appIcon_')) { await SimpleDB.set('images', key, importedData[key]); } else if (['cardDecks', 'chatCharacters', 'chatHistory', 'noteHistory', 'currentActiveDeck', 'currentChatCharacterId'].includes(key)) { } else { localStorage.setItem(key, typeof importedData[key] === 'object' ? JSON.stringify(importedData[key]) : importedData[key]); } } alert('旧版数据（含外观、牌组、历史）已成功迁移并导入！页面将刷新。'); } else { localStorage.clear(); if(importedData.ls) Object.keys(importedData.ls).forEach(key => localStorage.setItem(key, importedData.ls[key])); if(importedData.db_images) { for(const k in importedData.db_images) await SimpleDB.set('images', k, importedData.db_images[k]); } if(importedData.db_data) { for(const k in importedData.db_data) await SimpleDB.set('data', k, importedData.db_data[k]); } alert('数据导入成功！页面将刷新。'); } location.reload(); } catch (err) { alert('导入失败！文件格式错误或已损坏。'); console.error("导入错误:", err); } finally { hideLoading(); } }; reader.readAsText(file); } e.target.value = ''; });
+        resetAllDataBtn.addEventListener('click', async () => { if (confirm('【高危操作】这将清空所有角色、卡组、聊天记录和设置！此操作不可逆，确定要重置所有数据吗？')) { localStorage.clear(); indexedDB.deleteDatabase(SimpleDB.dbName); alert('所有数据已重置。页面将刷新。'); location.reload(); } });
+
+        // --- 抽卡 ---
+        const timeDisplay = document.getElementById('time-display'); const dateDisplay = document.getElementById('date-display'); const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; 
+        function updateTime() { const now = new Date(); const hours = String(now.getHours()).padStart(2, '0'); const minutes = String(now.getMinutes()).padStart(2, '0'); timeDisplay.textContent = `${hours}:${minutes}`; const month = now.getMonth() + 1; const day = now.getDate(); const weekDay = weekDays[now.getDay()]; dateDisplay.textContent = `${month}月${day}日, ${weekDay}`; } updateTime(); setInterval(updateTime, 60000);
+        const deckSettingsModal = document.getElementById('deck-settings-modal'); const openModalBtn = document.getElementById('nav-deck-settings'); const closeModalBtn = document.getElementById('close-modal-btn'); const saveDeckBtn = document.getElementById('save-deck-btn'); const deckSelector = document.getElementById('deck-selector'); const currentDeckNameInput = document.getElementById('current-deck-name'); const cardListContainer = document.getElementById('card-list-container'); const newCardInput = document.getElementById('new-card-input'); const addCardBtn = document.getElementById('add-card-btn'); const searchCardInput = document.getElementById('search-card-input'); const bulkImportModal = document.getElementById('bulk-import-modal'); const bulkImportBtn = document.getElementById('bulk-import-btn'); const confirmBulkImportBtn = document.getElementById('confirm-bulk-import-btn'); const cancelBulkImportBtn = document.getElementById('cancel-bulk-import-btn'); const bulkImportTextarea = document.getElementById('bulk-import-textarea'); const cardStack = document.getElementById('card-stack'); const questionInput = document.getElementById('question-input'); const askButton = document.getElementById('ask-button'); const drawCountIndicator = document.getElementById('draw-count-indicator'); const cardCharSelector = document.getElementById('card-char-selector');
+        
+        // 新增：抽卡控制元素
+        const customDrawCountInput = document.getElementById('custom-draw-count');
+        const randomDrawModeCheckbox = document.getElementById('random-draw-mode');
+        const minDrawCountInput = document.getElementById('min-draw-count');
+        const maxDrawCountInput = document.getElementById('max-draw-count');
+        const fixedDrawControl = document.getElementById('fixed-draw-control');
+        const randomModeControl = document.getElementById('random-mode-control');
+        
+        let cardDecks = {}; let originalDeckNameToEdit = ""; let currentActiveDeckName = ""; let isShuffling = false;
+        async function loadDecks() { const savedDecks = await SimpleDB.get('data', 'cardDecksData'); cardDecks = savedDecks || {}; currentActiveDeckName = await SimpleDB.get('data', 'currentActiveDeck') || Object.keys(cardDecks)[0] || ""; updateDeckSelectorAndLoadForEditing(); } 
+        async function saveDecksToDB() { await SimpleDB.set('data', 'cardDecksData', cardDecks); await SimpleDB.set('data', 'currentActiveDeck', currentActiveDeckName); }
+        function updateDeckSelectorAndLoadForEditing() { const selectedDeckForEditing = deckSelector.value; deckSelector.innerHTML = ''; Object.keys(cardDecks).forEach(name => { const option = new Option(name, name); deckSelector.add(option); }); const createNewOption = new Option("--- 创建新牌组 ---", "__CREATE_NEW__"); deckSelector.add(createNewOption); const deckToLoad = cardDecks[selectedDeckForEditing] ? selectedDeckForEditing : currentActiveDeckName; deckSelector.value = deckToLoad || "__CREATE_NEW__"; loadDeckIntoEditor(deckToLoad); } 
+        function loadDeckIntoEditor(deckName) { originalDeckNameToEdit = deckName; currentDeckNameInput.value = deckName; const cards = cardDecks[deckName] || []; renderCardList(cards); searchCardInput.value = ''; } 
+        function clearEditorForNewDeck() { originalDeckNameToEdit = ""; currentDeckNameInput.value = ""; currentDeckNameInput.placeholder = "为新牌组命名"; cardListContainer.innerHTML = ""; searchCardInput.value = ""; deckSelector.value = "__CREATE_NEW__"; } 
+        function renderCardList(cards) { cardListContainer.innerHTML = ''; cards.forEach(cardText => { const cardItem = document.createElement('div'); cardItem.className = 'card-item'; cardItem.innerHTML = `<span>${cardText}</span><button class="delete-card-btn">&times;</button>`; cardListContainer.appendChild(cardItem); }); }
+        searchCardInput.addEventListener('input', () => { const searchTerm = searchCardInput.value.toLowerCase(); Array.from(cardListContainer.children).forEach(item => { const cardText = item.querySelector('span').textContent.toLowerCase(); item.style.display = cardText.includes(searchTerm) ? 'flex' : 'none'; }); }); 
+        cardListContainer.addEventListener('click', e => { if (e.target.classList.contains('delete-card-btn')) { e.target.parentElement.remove(); } }); 
+        deckSelector.addEventListener('change', () => { const selectedValue = deckSelector.value; if (selectedValue === "__CREATE_NEW__") { clearEditorForNewDeck(); } else { loadDeckIntoEditor(selectedValue); currentActiveDeckName = selectedValue; saveDecksToDB(); } }); 
+        addNewCardToUI = () => { const text = newCardInput.value.trim(); if(text){ const item = document.createElement('div'); item.className = 'card-item'; item.innerHTML = `<span>${text}</span><button class="delete-card-btn">&times;</button>`; cardListContainer.appendChild(item); newCardInput.value = ''; newCardInput.focus(); } }; 
+        addCardBtn.addEventListener('click', addNewCardToUI); newCardInput.addEventListener('keypress', e => { if (e.key === 'Enter') addNewCardToUI(); }); 
+        saveDeckBtn.addEventListener('click', async () => { const newDeckName = currentDeckNameInput.value.trim(); if (!newDeckName) { alert("牌组名称不能为空！"); return; } const newCards = Array.from(cardListContainer.querySelectorAll('.card-item span')).map(span => span.textContent); if (originalDeckNameToEdit && originalDeckNameToEdit !== newDeckName) { delete cardDecks[originalDeckNameToEdit]; } cardDecks[newDeckName] = newCards; currentActiveDeckName = newDeckName; await saveDecksToDB(); alert(`牌组 "${newDeckName}" 已保存成功！`); updateDeckSelectorAndLoadForEditing(); clearEditorForNewDeck(); });
+        openModalBtn.addEventListener('click', () => { deckSettingsModal.style.display = 'flex'; document.getElementById('card-back-btn').style.visibility = 'hidden'; loadDecks(); }); 
+        closeModalBtn.addEventListener('click', () => { deckSettingsModal.style.display = 'none'; document.getElementById('card-back-btn').style.visibility = 'visible'; }); 
+        bulkImportBtn.addEventListener('click', () => { bulkImportModal.style.display = 'flex'; bulkImportTextarea.value = ''; bulkImportTextarea.focus(); }); cancelBulkImportBtn.addEventListener('click', () => { bulkImportModal.style.display = 'none'; }); 
+        confirmBulkImportBtn.addEventListener('click', () => { const text = bulkImportTextarea.value.trim(); if (text) { const cards = text.split('\n').filter(line => line.trim() !== ''); cards.forEach(cardText => { const item = document.createElement('div'); item.className = 'card-item'; item.innerHTML = `<span>${cardText.trim()}</span><button class="delete-card-btn">&times;</button>`; cardListContainer.appendChild(item); }); } bulkImportModal.style.display = 'none'; });
+        
+        // 新增：随机模式显示/隐藏控制
+        function updateDrawModeVisibility() {
+            if (randomDrawModeCheckbox.checked) {
+                fixedDrawControl.style.display = 'none';
+                randomModeControl.style.display = 'flex';
+            } else {
+                fixedDrawControl.style.display = 'flex';
+                randomModeControl.style.display = 'none';
+            }
+        }
+        
+        randomDrawModeCheckbox.addEventListener('change', updateDrawModeVisibility);
+        
+        // 初始化显示状态
+        updateDrawModeVisibility();
+        
+        // --- 角色和聊天 ---
+        const charManagerModal = document.getElementById('character-manager-modal'); const charEditorModal = document.getElementById('character-editor-modal'); const closeCharManagerBtn = document.getElementById('close-char-manager-modal-btn'); const closeCharEditorBtn = document.getElementById('close-char-editor-modal-btn'); const saveCharBtn = document.getElementById('save-char-btn'); const charListContainer = document.getElementById('character-list'); const sidebarList = document.getElementById('chat-sidebar-list'); const chatHeaderTitle = document.getElementById('chat-header-title'); const chatActionsBtn = document.getElementById('chat-actions-btn'); const chatActionsMenu = document.getElementById('chat-actions-menu');
+        const chatHeaderNormal = document.getElementById('chat-header-normal');
+        const chatSelectionHeader = document.getElementById('chat-selection-header');
+        const selectionCancelBtn = document.getElementById('selection-cancel-btn');
+        const selectionDeleteBtn = document.getElementById('selection-delete-btn');
+        const selectionTitle = document.getElementById('selection-title');
+
+        let characters = {}; let currentChatCharacterId = null; let chatHistory = {}; 
+        
+        // --- 新增：选择模式状态 ---
+        let isChatSelectionMode = false;
+        let selectedMessageIndices = new Set(); // 存储选中的消息索引
+
+        async function loadChatData() { 
+            characters = await SimpleDB.get('data', 'chatCharacters') || {}; 
+            chatHistory = await SimpleDB.get('data', 'chatHistory') || {}; 
+            currentChatCharacterId = await SimpleDB.get('data', 'currentChatCharacterId'); 
+            renderSidebarCharacterList(); 
+            if(currentChatCharacterId) switchToCharacter(currentChatCharacterId); 
+            updateCardAppCharSelector();
+        } 
+        async function saveChatData() { 
+            await SimpleDB.set('data', 'chatCharacters', characters); 
+            await SimpleDB.set('data', 'chatHistory', chatHistory); 
+        }
+
+        function renderCharacterListInManager() { charListContainer.innerHTML = ''; for (const id in characters) { const item = document.createElement('div'); item.className = 'character-item'; item.dataset.id = id; item.innerHTML = `<span>${characters[id].name}</span><span class="delete-char-btn" data-id="${id}">&times;</span>`; charListContainer.appendChild(item); } } 
+        function renderSidebarCharacterList() { sidebarList.innerHTML = ''; for (const id in characters) { const char = characters[id]; const item = document.createElement('div'); item.className = 'sidebar-character'; item.dataset.id = id; if(id === currentChatCharacterId) item.classList.add('active'); item.innerHTML = `<div class="avatar" style="background-image: url(${char.avatar || ''})"></div><span class="name">${char.name}</span>`; sidebarList.appendChild(item); } }
+        
+        function updateCardAppCharSelector() {
+            cardCharSelector.innerHTML = '';
+            const charKeys = Object.keys(characters);
+            if (charKeys.length === 0) {
+                const option = new Option("请先在通讯录添加角色", "");
+                cardCharSelector.add(option);
+                cardCharSelector.disabled = true;
+            } else {
+                cardCharSelector.disabled = false;
+                const defaultOption = new Option("--- 请选择角色 ---", "");
+                cardCharSelector.add(defaultOption);
+                charKeys.forEach(id => {
+                    const option = new Option(characters[id].name, id);
+                    cardCharSelector.add(option);
+                });
+                if (currentChatCharacterId) {
+                    cardCharSelector.value = currentChatCharacterId;
+                }
+            }
+        }
+        cardCharSelector.addEventListener('change', (e) => {
+            const newId = e.target.value;
+            if (newId) {
+                switchToCharacter(newId);
+            } else {
+                currentChatCharacterId = null;
+                checkGameState();
+            }
+        });
+
+        // 修改：添加消息时支持时间戳参数
+function addMessageToChat(characterId, sender, text, cardColorIndex = null, timestamp = null) { 
+    if (!chatHistory[characterId]) chatHistory[characterId] = []; 
+    
+    // 如果没有提供时间戳，生成当前时间
+    if (!timestamp) {
+        const now = new Date();
+        timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    }
+    
+    const message = { sender, text, timestamp };
+    if (cardColorIndex !== null) {
+        message.cardColorIndex = cardColorIndex;
+    }
+    chatHistory[characterId].push(message); 
+    saveChatData(); 
+    if (characterId === currentChatCharacterId) {
+        renderChatBody(characterId);
+    }
+}        
+       // 修改：renderChatBody 函数，添加时间戳显示
+function renderChatBody(characterId, showAll = false) { 
+    chatBody.innerHTML = ''; 
+    const fullHistory = chatHistory[characterId] || []; 
+    
+    if (fullHistory.length === 0) { 
+        chatBody.innerHTML = '<p style="text-align: center; color: #aaa;">开始对话吧</p>'; 
+        return; 
+    } 
+
+    let startIndex = 0;
+    let displayHistory = fullHistory;
+    if (!showAll && fullHistory.length > 30) {
+        startIndex = fullHistory.length - 30;
+        displayHistory = fullHistory.slice(-30);
+        const loadBtn = document.createElement('div');
+        loadBtn.className = 'chat-load-more-btn';
+        loadBtn.textContent = `加载全部历史记录 (${fullHistory.length - 30}条更多)`;
+        loadBtn.onclick = () => renderChatBody(characterId, true); 
+        chatBody.appendChild(loadBtn);
+    }
+
+    const char = characters[characterId]; 
+    
+    let lastDate = null;
+    
+    displayHistory.forEach((msg, i) => { 
+        const absoluteIndex = startIndex + i;
+        
+        // 检查是否需要显示日期分隔
+        const messageDate = new Date(msg.timestamp).toDateString();
+        if (messageDate !== lastDate) {
+            const dateSeparator = document.createElement('div');
+            dateSeparator.className = 'message-timestamp';
+            dateSeparator.innerHTML = `<span>${formatDate(new Date(msg.timestamp))}</span>`;
+            chatBody.appendChild(dateSeparator);
+            lastDate = messageDate;
+        }
+        
+        const messageEl = document.createElement('div'); 
+        messageEl.className = `chat-message ${msg.sender}`; 
+        messageEl.dataset.index = absoluteIndex;
+
+        if (selectedMessageIndices.has(absoluteIndex)) {
+            messageEl.classList.add('selected');
+        }
+
+        let bubbleHTML; 
+        if (msg.sender === 'character') { 
+            let bubbleStyle = '';
+            if (msg.cardColorIndex !== undefined && cardColors[msg.cardColorIndex]) {
+                const color = cardColors[msg.cardColorIndex];
+                bubbleStyle = `style="background-color: ${color.bg}; color: ${color.text}; border: 1px solid ${color.border}"`;
+            }
+            bubbleHTML = `<div class="avatar" style="background-image: url(${char.avatar || ''})"></div><div class="bubble" ${bubbleStyle} data-timestamp="${msg.timestamp}">${msg.text}</div>`; 
+        } else { 
+            bubbleHTML = `<div class="bubble" data-timestamp="${msg.timestamp}">${msg.text}</div>`; 
+        } 
+        messageEl.innerHTML = bubbleHTML; 
+
+        // 事件绑定保持不变...
+        let pressTimer;
+
+        // 触摸事件
+        messageEl.addEventListener('touchstart', (e) => {
+            if(isChatSelectionMode) return;
+            pressTimer = setTimeout(() => {
+                enterSelectionMode(absoluteIndex);
+            }, 800);
+        });
+        messageEl.addEventListener('touchend', () => clearTimeout(pressTimer));
+        messageEl.addEventListener('touchmove', () => clearTimeout(pressTimer));
+
+        // 鼠标事件
+        messageEl.addEventListener('mousedown', (e) => {
+            if(isChatSelectionMode) return;
+            pressTimer = setTimeout(() => {
+                enterSelectionMode(absoluteIndex);
+            }, 800);
+        });
+        messageEl.addEventListener('mouseup', () => clearTimeout(pressTimer));
+        messageEl.addEventListener('mouseleave', () => clearTimeout(pressTimer));
+
+        // 点击事件
+        messageEl.addEventListener('click', (e) => {
+            if (isChatSelectionMode) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleMessageSelection(absoluteIndex);
+            }
+        });
+
+        chatBody.appendChild(messageEl); 
+    }); 
+    
+    if (selectedMessageIndices.size === 0) {
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }
+}
+// 新增：格式化日期函数
+function formatDate(date) {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+        return '今天';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+        return '昨天';
+    } else {
+        return `${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+}
+
+        // --- 选择模式逻辑 ---
+        function enterSelectionMode(initialIndex) {
+            if (isChatSelectionMode) return;
+            isChatSelectionMode = true;
+            selectedMessageIndices.clear();
+            if (initialIndex !== null && initialIndex !== undefined) {
+                selectedMessageIndices.add(initialIndex);
+            }
+            
+            // UI 切换
+            chatHeaderNormal.style.display = 'none';
+            chatSelectionHeader.style.display = 'flex';
+            updateSelectionUI();
+            
+            // 重新渲染以显示选中样式
+            renderChatBody(currentChatCharacterId, false); // 保持当前视图范围即可，简化处理
+        }
+
+        function exitSelectionMode() {
+            isChatSelectionMode = false;
+            selectedMessageIndices.clear();
+            
+            chatHeaderNormal.style.display = 'flex';
+            chatSelectionHeader.style.display = 'none';
+            
+            renderChatBody(currentChatCharacterId, false);
+        }
+
+        function toggleMessageSelection(index) {
+            if (selectedMessageIndices.has(index)) {
+                selectedMessageIndices.delete(index);
+            } else {
+                selectedMessageIndices.add(index);
+            }
+            updateSelectionUI();
+            
+            // 只更新 DOM class，避免完全重绘导致闪烁
+            const msgEl = chatBody.querySelector(`.chat-message[data-index="${index}"]`);
+            if (msgEl) {
+                if (selectedMessageIndices.has(index)) msgEl.classList.add('selected');
+                else msgEl.classList.remove('selected');
+            }
+        }
+
+        function updateSelectionUI() {
+            const count = selectedMessageIndices.size;
+            selectionTitle.textContent = count > 0 ? `已选择 ${count} 条` : '请选择消息';
+            selectionDeleteBtn.style.opacity = count > 0 ? '1' : '0.5';
+        }
+
+        // 删除选中消息
+        selectionDeleteBtn.addEventListener('click', async () => {
+            if (selectedMessageIndices.size === 0) return;
+            
+            if (confirm(`确定要删除这 ${selectedMessageIndices.size} 条消息吗？`)) {
+                const history = chatHistory[currentChatCharacterId];
+                // 从后往前删，避免索引错位
+                const indicesData = Array.from(selectedMessageIndices).sort((a, b) => b - a);
+                
+                indicesData.forEach(index => {
+                    if (index >= 0 && index < history.length) {
+                        history.splice(index, 1);
+                    }
+                });
+                
+                await saveChatData();
+                exitSelectionMode();
+            }
+        });
+
+        selectionCancelBtn.addEventListener('click', exitSelectionMode);
+
+        // --------------------
+        
+        async function switchToCharacter(id) { 
+            // 切换角色时强制退出选择模式
+            if(isChatSelectionMode) exitSelectionMode();
+
+            if (!id || !characters[id]) { chatHeaderTitle.textContent = "通讯"; chatBody.innerHTML = '<p style="text-align: center; color: #aaa;">请先添加并选择一个角色</p>'; currentChatCharacterId = null; await SimpleDB.del('data', 'currentChatCharacterId'); renderSidebarCharacterList(); checkGameState(); return; } 
+            currentChatCharacterId = id; 
+            await SimpleDB.set('data', 'currentChatCharacterId', id); 
+            const char = characters[id]; chatHeaderTitle.textContent = char.name; renderChatBody(id, false); renderSidebarCharacterList(); 
+            if (cardCharSelector.value !== id) {
+                cardCharSelector.value = id;
+            }
+            checkGameState(); 
+        }
+        
+        sidebarList.addEventListener('click', e => { const target = e.target.closest('.sidebar-character'); if(target) switchToCharacter(target.dataset.id); });
+        chatActionsBtn.addEventListener('click', (e) => { e.stopPropagation(); chatActionsMenu.style.display = chatActionsMenu.style.display === 'flex' ? 'none' : 'flex'; }); 
+        document.addEventListener('click', () => chatActionsMenu.style.display = 'none');
+        
+        document.getElementById('add-character-menu-btn').addEventListener('click', () => { document.getElementById('char-editor-title').textContent = '创建新角色'; document.getElementById('editing-char-id').value = ''; document.getElementById('edit-char-name').value = ''; document.getElementById('edit-char-prompt').value = ''; const avatarPreview = document.getElementById('edit-char-avatar-preview'); avatarPreview.style.backgroundImage = ''; avatarPreview.textContent = '点击上传'; charEditorModal.style.display = 'flex'; });
+        document.getElementById('manage-characters-menu-btn').addEventListener('click', () => { renderCharacterListInManager(); charManagerModal.style.display = 'flex'; });
+        closeCharManagerBtn.addEventListener('click', () => charManagerModal.style.display = 'none');
+        
+        charListContainer.addEventListener('click', async (e) => { e.stopPropagation(); if (e.target.classList.contains('delete-char-btn')) { const charId = e.target.dataset.id; if (confirm(`确定要删除角色 "${characters[charId].name}" 吗？`)) { delete characters[charId]; if(currentChatCharacterId === charId) await switchToCharacter(null); saveChatData(); renderCharacterListInManager(); renderSidebarCharacterList(); updateCardAppCharSelector(); } } else { const target = e.target.closest('.character-item'); if (target) { const charId = target.dataset.id; const char = characters[charId]; document.getElementById('char-editor-title').textContent = '编辑角色'; document.getElementById('editing-char-id').value = charId; document.getElementById('edit-char-name').value = char.name; document.getElementById('edit-char-prompt').value = char.prompt || ''; const avatarPreview = document.getElementById('edit-char-avatar-preview'); avatarPreview.style.backgroundImage = `url(${char.avatar || ''})`; avatarPreview.textContent = char.avatar ? '' : '点击上传'; charManagerModal.style.display = 'none'; charEditorModal.style.display = 'flex'; } } });
+        closeCharEditorBtn.addEventListener('click', () => charEditorModal.style.display = 'none');
+        
+        saveCharBtn.addEventListener('click', () => { let id = document.getElementById('editing-char-id').value; const name = document.getElementById('edit-char-name').value.trim(); if (!name) { alert("角色名字不能为空！"); return; } if (!id) { id = `char_${Date.now()}`; } const prompt = document.getElementById('edit-char-prompt').value.trim(); const bgImage = document.getElementById('edit-char-avatar-preview').style.backgroundImage; const avatar = bgImage.startsWith('url') ? bgImage.slice(5, -2) : ''; characters[id] = { ...characters[id], id, name, prompt, avatar }; saveChatData(); renderSidebarCharacterList(); switchToCharacter(id); updateCardAppCharSelector(); charEditorModal.style.display = 'none'; });
+        document.getElementById('edit-char-avatar-upload').addEventListener('change', e => { const file = e.target.files[0]; if(file){ handleImageUpload(file, (img) => { const avatarPreview = document.getElementById('edit-char-avatar-preview'); avatarPreview.style.backgroundImage = `url(${img})`; avatarPreview.textContent = ''; }); } });
+        
+        // --- 游戏状态 ---
+        let gameState = 'can_ask'; let drawCount = 0;
+        let maxDrawCount = 4; // 默认抽卡次数
+        
+        const shuffleButton = document.getElementById('shuffle-button');
+        
+        function checkGameState() { 
+            if (gameState === 'can_ask') { 
+                questionInput.disabled = false; 
+                askButton.disabled = !(questionInput.value.trim() !== '' && currentChatCharacterId !== null); 
+                shuffleButton.disabled = true; 
+                drawCountIndicator.style.visibility = 'hidden'; 
+            } else { 
+                questionInput.disabled = true; 
+                askButton.disabled = true; 
+                shuffleButton.disabled = false; 
+                drawCountIndicator.style.visibility = 'visible'; 
+                drawCountIndicator.textContent = `剩余抽卡次数：${maxDrawCount - drawCount}`; 
+            } 
+        }
+        
+        questionInput.addEventListener('input', checkGameState);
+        askButton.addEventListener('click', () => { 
+            const questionText = questionInput.value.trim(); 
+            if (questionText && currentChatCharacterId) { 
+// 生成时间戳
+        const now = new Date();
+        const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        
+        addMessageToChat(currentChatCharacterId, 'user', questionText, null, timestamp);
+                questionInput.value = ''; 
+                gameState = 'awaiting_draws'; 
+                drawCount = 0; 
+                
+                // 根据模式确定抽卡次数
+                if (randomDrawModeCheckbox.checked) {
+                    // 随机模式：在最小和最大值之间随机选择
+                    const min = parseInt(minDrawCountInput.value);
+                    const max = parseInt(maxDrawCountInput.value);
+                    if (min >= 1 && max >= min && max <= 20) {
+                        maxDrawCount = Math.floor(Math.random() * (max - min + 1)) + min;
+                    } else {
+                        maxDrawCount = 4; // 默认值
+                    }
+                } else {
+                    // 固定模式
+                    const fixedCount = parseInt(customDrawCountInput.value);
+                    if (fixedCount >= 1 && fixedCount <= 20) {
+                        maxDrawCount = fixedCount;
+                    } else {
+                        maxDrawCount = 4; // 默认值
+                        customDrawCountInput.value = 4;
+                    }
+                }
+                
+                checkGameState(); 
+                cardStack.querySelector('.pos-top .card-content').textContent = '请抽第一张卡'; 
+            } 
+        });
+        
+        // 修复洗牌功能
+        shuffleButton.addEventListener('click', () => { 
+            if (isShuffling || gameState !== 'awaiting_draws') return; 
+            const deck = cardDecks[currentActiveDeckName]; 
+            if (!deck || deck.length === 0) { alert("当前牌组为空或未选择，请在设置中配置！"); return; } 
+            isShuffling = true; 
+            
+            drawCount++; 
+            const randIndex = Math.floor(Math.random() * deck.length); 
+            const drawnCard = deck[randIndex]; 
+            
+            // 随机选择卡牌颜色（从激活的颜色中随机选择）
+            const randomColorIndex = Math.floor(Math.random() * activeColorCount);
+            
+            const middleCard = cardStack.querySelector('.pos-middle'); 
+            middleCard.querySelector('.card-content').textContent = drawnCard; 
+            
+// 生成时间戳
+    const now = new Date();
+    const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+            // 更新卡牌颜色类
+            middleCard.className = `card card-color-${randomColorIndex + 1} pos-middle`;
+            
+            cardStack.classList.add('is-shuffling'); 
+            setTimeout(() => { 
+                const topCard = cardStack.querySelector('.pos-top'); 
+                const bottomCard = cardStack.querySelector('.pos-bottom'); 
+                cardStack.classList.remove('is-shuffling'); 
+                topCard.classList.remove('pos-top'); topCard.classList.add('pos-offscreen'); 
+                middleCard.classList.remove('pos-middle'); middleCard.classList.add('pos-top'); 
+                bottomCard.classList.remove('pos-bottom'); bottomCard.classList.add('pos-middle'); 
+                topCard.querySelector('.card-content').textContent = ''; 
+                cardStack.appendChild(topCard); 
+                topCard.classList.remove('pos-offscreen'); topCard.classList.add('pos-bottom'); 
+                isShuffling = false; 
+                
+ try {
+        // 保存消息时不传递时间戳（自主抽卡时角色回复无时间戳）
+addMessageToChat(currentChatCharacterId, 'character', drawnCard, randomColorIndex);
+    } catch(e) { console.error("保存消息失败，但不中断游戏", e); }
+
+                if (drawCount < maxDrawCount) { 
+                    checkGameState(); 
+                } else { 
+                    gameState = 'can_ask'; 
+                    checkGameState(); 
+                    setTimeout(() => { cardStack.querySelector('.pos-top .card-content').textContent = '请再次提问'; }, 1500); 
+                } 
+            }, 350); 
+        });
+        
+        // --- 纸条App ---
+        const notesAppMainView = document.getElementById('notes-app-main-view'); const noteReplyView = document.getElementById('note-reply-view'); const noteHistoryView = document.getElementById('note-history-view'); const noteReplyContent = document.getElementById('note-reply-content'); const noteReplyBackBtn = document.getElementById('note-reply-back-btn'); const noteHistoryBtn = document.getElementById('note-history-btn'); const noteHistoryBackBtn = document.getElementById('note-history-back-btn'); const noteHistoryList = document.getElementById('note-history-list');
+        const noteCharSelector = document.getElementById('note-char-selector'); const noteUserInput = document.getElementById('note-user-input'); const noteDrawCardBtn = document.getElementById('note-draw-card-btn'); const noteDrawnCardsContainer = document.getElementById('note-drawn-cards-container'); const noteDrawCardLabel = document.getElementById('note-draw-card-label'); const noteGenerateBtn = document.getElementById('note-generate-btn');
+        
+        let noteCardDrawCount = 0; let noteHistory = [];
+
+        async function loadNoteHistory() { 
+            noteHistory = await SimpleDB.get('data', 'noteHistory') || []; 
+        }
+        async function saveNoteHistory() { 
+            await SimpleDB.set('data', 'noteHistory', noteHistory); 
+        }
+
+        function showNotesMainView() { notesAppMainView.style.display = 'flex'; noteReplyView.style.display = 'none'; noteHistoryView.style.display = 'none'; }
+        
+        // 修复1：在重置纸条界面时，显式重置按钮文字和状态
+        function prepareNotesApp() { 
+            showNotesMainView(); 
+            noteCharSelector.innerHTML = ''; 
+            const charKeys = Object.keys(characters); 
+            if (charKeys.length === 0) { 
+                const option = document.createElement('option'); 
+                option.textContent = '请先去"通讯"App中添加角色'; 
+                noteCharSelector.add(option); 
+            } else { 
+                charKeys.forEach(id => { const option = new Option(characters[id].name, id); noteCharSelector.add(option); }); 
+            } 
+            noteUserInput.value = ''; 
+            noteCardDrawCount = 0; 
+            Array.from(noteDrawnCardsContainer.children).forEach(el => el.textContent = ''); 
+            noteDrawCardLabel.textContent = `为这次交换抽取主题卡 (${noteCardDrawCount}/4):`; 
+            
+            // 关键修复点：重置按钮
+            noteGenerateBtn.textContent = '生成回信';
+            
+            checkNotesButtonState(); 
+        }
+
+        function checkNotesButtonState() { const hasChars = Object.keys(characters).length > 0; const hasDeck = currentActiveDeckName && cardDecks[currentActiveDeckName] && cardDecks[currentActiveDeckName].length > 0; noteDrawCardBtn.disabled = !hasChars || !hasDeck || noteCardDrawCount >= 4; noteGenerateBtn.disabled = !hasChars || noteCardDrawCount < 4 || noteUserInput.value.trim() === ''; }
+        noteCharSelector.addEventListener('change', checkNotesButtonState); noteUserInput.addEventListener('input', checkNotesButtonState);
+        noteDrawCardBtn.addEventListener('click', () => { if (noteCardDrawCount >= 4) return; const deck = cardDecks[currentActiveDeckName]; if (!deck || deck.length === 0) { alert(`当前活动牌组"${currentActiveDeckName}"为空，请先在抽卡App的设置中添加卡片！`); return; } const randIndex = Math.floor(Math.random() * deck.length); const drawnCard = deck[randIndex]; const cardSlot = noteDrawnCardsContainer.children[noteCardDrawCount]; cardSlot.textContent = drawnCard; noteCardDrawCount++; noteDrawCardLabel.textContent = `为这次交换抽取主题卡 (${noteCardDrawCount}/4):`; checkNotesButtonState(); });
+        noteGenerateBtn.addEventListener('click', async () => { 
+            const charId = noteCharSelector.value; const character = characters[charId]; if (!character) { alert('请选择一个有效的角色。'); return; } 
+            const userNote = noteUserInput.value.trim(); const drawnCards = Array.from(noteDrawnCardsContainer.children).map(el => el.textContent).filter(text => text); 
+            const systemPrompt = `你正在扮演一个角色，你需要根据你的角色设定，对用户写给你的小纸条进行回复。回复内容需要结合抽到的多个"主题字卡"。请用亲切、符合人设的口吻，写一封回信。回信内容最多100个字。\n你的角色设定是：${character.prompt || '一个温柔的朋友'}\n`; 
+            const userPrompt = `这是我写给你的小纸条内容：\n---\n${userNote}\n---\n我们为这次通信抽到的主题字卡是：【${drawnCards.join('、')}】\n现在，请根据你的角色设定，给我写一封回信。`; 
+            noteGenerateBtn.disabled = true; noteGenerateBtn.textContent = '正在生成回信...'; 
+            try { 
+                const responseText = await callApi(systemPrompt, userPrompt); 
+                const newRecord = { id: Date.now(), charId: charId, charName: character.name, userNote: userNote, drawnCards: drawnCards, reply: responseText, date: new Date().toLocaleString() }; 
+                noteHistory.unshift(newRecord); saveNoteHistory(); 
+                noteReplyContent.textContent = responseText; notesAppMainView.style.display = 'none'; noteReplyView.style.display = 'flex'; 
+                noteReplyBackBtn.onclick = () => { prepareNotesApp(); showNotesMainView(); }; 
+            } catch (error) { 
+                alert(`生成失败: ${error.message}`); 
+                // 失败也要重置
+                noteGenerateBtn.disabled = false; 
+                noteGenerateBtn.textContent = '生成回信'; 
+            } 
+        });
+        noteHistoryBackBtn.addEventListener('click', showNotesMainView);
+        noteHistoryBtn.addEventListener('click', () => { notesAppMainView.style.display = 'none'; noteHistoryView.style.display = 'flex'; noteHistoryList.innerHTML = ''; if (noteHistory.length === 0) { noteHistoryList.innerHTML = '<li style="text-align: center; color: #999; padding: 20px;">还没有历史记录哦</li>'; return; } noteHistory.forEach(record => { const li = document.createElement('li'); li.className = 'note-history-item'; li.innerHTML = `<div class="note-history-item-header"><span class="note-history-char-name">${record.charName}</span><span class="note-history-date">${record.date}</span></div><p class="note-history-preview">${record.userNote || '（无内容）'}</p>`; li.addEventListener('click', () => { const fullNoteContent = `<b>你的纸条:</b>\n${record.userNote}\n\n<b>主题卡:</b>\n${record.drawnCards.join(' / ')}\n\n<b>${record.charName}的回信:</b>\n${record.reply}`; noteReplyContent.innerHTML = fullNoteContent.replace(/\n/g, '<br>'); noteHistoryView.style.display = 'none'; noteReplyView.style.display = 'flex'; noteReplyBackBtn.onclick = () => { noteHistoryView.style.display = 'flex'; noteReplyView.style.display = 'none'; }; }); noteHistoryList.appendChild(li); }); });
+
+        // --- 初始加载 ---
+        setTimeout(() => { if (loadingEl.classList.contains('active')) { emergencyResetBtn.style.display = 'block'; } }, 3000);
+        async function initialize() {
+            try {
+                await SimpleDB.open();
+                await Promise.all([loadDecks(), loadChatData(), loadNoteHistory(), loadAppearanceSettings(), loadCardColors()]);
+                loadApiSettings(); loadFontSettings(); loadFontSize(); loadDefaultDrawSettings(); loadColorCount(); loadAutoDrawSettings();
+                checkGameState();
+                console.log("初始化完成，数据库已连接。");
+            } catch (err) {
+                console.error("初始化失败:", err);
+                alert("初始化失败，请点击屏幕下方的红色按钮重置数据。错误：" + err);
+                emergencyResetBtn.style.display = 'block';
+            } finally { hideLoading(); }
+        }
+        initialize();
+    </script>
+</body>
+</html>
